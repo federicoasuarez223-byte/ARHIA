@@ -20,6 +20,7 @@ import { performanceRouter } from './modules/performance/performance.routes';
 import { recruitmentRouter } from './modules/recruitment/recruitment.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
 import { riskRouter } from './modules/risk/risk.routes';
+import { settingsRouter } from './modules/settings/settings.routes';
 
 export function createApp() {
   const app = express();
@@ -99,6 +100,7 @@ export function createApp() {
   app.use('/api/payroll', payrollRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/chat', chatRouter);
+  app.use('/api/settings', settingsRouter);
 
   // 404 + error handling
   app.use(notFound);
