@@ -10,6 +10,7 @@ import { logger } from './config/logger';
 import { redis } from './config/redis';
 import { errorHandler, notFound } from './middlewares/error.middleware';
 import { authRouter } from './modules/auth/auth.routes';
+import { chatRouter } from './modules/chat/chat.routes';
 import { employeesRouter } from './modules/employees/employees.routes';
 
 export function createApp() {
@@ -81,6 +82,7 @@ export function createApp() {
   // API routes
   app.use('/api/auth', authRouter);
   app.use('/api/employees', employeesRouter);
+  app.use('/api/chat', chatRouter);
 
   // 404 + error handling
   app.use(notFound);
