@@ -1,0 +1,110 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: arhia_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-arhia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-arhia_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-arhia_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-arhia} -d ${POSTGRES_DB:-arhia_db}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arhia_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: arhia_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-arhia_redis_password}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-arhia_redis_password}', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - arhia_network
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    container_name: arhia_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-arhia}:${POSTGRES_PASSWORD:-arhia_dev_password}@postgres:5432/${POSTGRES_DB:-arhia_db}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:-arhia_redis_password}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change_me_in_production_access}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_in_production_refresh}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    ports:
+      - '${API_PORT:-3001}:3001'
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./packages/shared:/packages/shared
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - arhia_network
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      target: development
+    container_name: arhia_web
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:${API_PORT:-3001}
+      VITE_WS_URL: ws://localhost:${API_PORT:-3001}
+    ports:
+      - '${WEB_PORT:-5173}:5173'
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./packages/shared:/packages/shared
+      - ./packages/ui:/packages/ui
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - arhia_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  arhia_network:
+    driver: bridge

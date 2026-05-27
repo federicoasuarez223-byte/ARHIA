@@ -1,0 +1,112 @@
+// ARHIA — Prisma Schema
+// Multi-tenant: schema_{company_id} per tenant
+// Public schema contains: companies, users (global)
+// Tenant schemas contain everything else
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public"]
+}
+
+// ─── PUBLIC SCHEMA (global) ──────────────────────────────────────────────────
+
+model Company {
+  id           String      @id @default(uuid())
+  name         String
+  legalName    String
+  cuit         String      @unique
+  industry     String?
+  size         CompanySize @default(SMALL)
+  plan         PlanTier    @default(STARTER)
+  planExpiresAt DateTime?
+  tenantSchema String      @unique
+  logoUrl      String?
+  phone        String?
+  website      String?
+  isActive     Boolean     @default(true)
+  settings     Json        @default("{}")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  users User[]
+
+  @@map("companies")
+  @@schema("public")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  companyId    String
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         UserRole  @default(EMPLOYEE)
+  employeeId   String?
+  avatarUrl    String?
+  isActive     Boolean   @default(true)
+  mfaEnabled   Boolean   @default(false)
+  mfaSecret    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+
+  @@index([companyId])
+  @@index([email])
+  @@map("users")
+  @@schema("public")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  refreshToken String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshToken])
+  @@map("sessions")
+  @@schema("public")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  HR_MANAGER
+  MANAGER
+  EMPLOYEE
+
+  @@schema("public")
+}
+
+enum PlanTier {
+  STARTER
+  BUSINESS
+  ENTERPRISE
+
+  @@schema("public")
+}
+
+enum CompanySize {
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+
+  @@schema("public")
+}
