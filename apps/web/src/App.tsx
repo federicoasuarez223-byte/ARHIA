@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { Toaster } from '@/components/ui/Toaster';
 import { AttendancePage } from '@/pages/AttendancePage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { AutomationPage } from '@/pages/AutomationPage';
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
+      <Toaster />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

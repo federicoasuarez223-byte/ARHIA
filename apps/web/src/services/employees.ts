@@ -42,6 +42,24 @@ export interface ListEmployeesParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface CreateEmployeeDto {
+  firstName: string;
+  lastName: string;
+  email: string;
+  departmentId: string;
+  position: string;
+  hireDate: string;
+  contractType: string;
+  salary: number;
+  currency?: string;
+  phone?: string;
+  dni?: string;
+  cuil?: string;
+  legajo?: string;
+  seniority?: string;
+  notes?: string;
+}
+
 export interface ApiListResponse<T> {
   success: boolean;
   data: T[];
@@ -66,6 +84,16 @@ export const employeesService = {
 
   async get(id: string) {
     const { data } = await apiClient.get(`/api/employees/${id}`);
+    return data;
+  },
+
+  async create(dto: CreateEmployeeDto) {
+    const { data } = await apiClient.post('/api/employees', dto);
+    return data;
+  },
+
+  async update(id: string, dto: Partial<CreateEmployeeDto>) {
+    const { data } = await apiClient.patch(`/api/employees/${id}`, dto);
     return data;
   },
 

@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { Search, UserPlus, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { useState } from 'react';
 
+import { CreateEmployeeModal } from '@/components/modules/employees/CreateEmployeeModal';
 import { employeesService, type EmployeeListItem } from '@/services/employees';
 
 const STATUS_CONFIG: Record<
@@ -54,6 +55,7 @@ export function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -86,7 +88,7 @@ export function EmployeesPage() {
             {total > 0 ? `${total} empleados en tu organización` : 'Gestioná tu equipo'}
           </p>
         </div>
-        <Button variant="primary" size="sm" className="gap-2">
+        <Button variant="primary" size="sm" className="gap-2" onClick={() => setShowCreate(true)}>
           <UserPlus size={16} />
           Nuevo empleado
         </Button>
@@ -244,6 +246,8 @@ export function EmployeesPage() {
           </div>
         </div>
       )}
+
+      <CreateEmployeeModal open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
   );
 }

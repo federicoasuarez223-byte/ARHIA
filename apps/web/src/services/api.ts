@@ -45,7 +45,10 @@ apiClient.interceptors.response.use(
       }
 
       const newToken = await refreshPromise;
-      if (original) original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
+      if (original) {
+        original.headers = original.headers ?? {};
+        (original.headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+      }
       return apiClient(original!);
     }
 
