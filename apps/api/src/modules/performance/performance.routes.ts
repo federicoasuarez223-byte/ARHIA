@@ -9,5 +9,5 @@ export const performanceRouter = Router();
 
 performanceRouter.use(authenticate, resolveTenant);
 
-performanceRouter.get('/performance', handleListReviews);
-performanceRouter.post('/performance', handleCreateReview);
+performanceRouter.get('/', handleListReviews);
+performanceRouter.post('/', handleCreateReview);

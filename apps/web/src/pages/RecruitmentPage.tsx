@@ -1,45 +1,119 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@arhia/ui';
-import { UserPlus, Search, Star, Clock, CheckCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { UserPlus, Search, Clock, CheckCircle, Users, Briefcase } from 'lucide-react';
+
+import apiClient from '@/services/api';
+
+interface RecruitmentSearch {
+  id: string;
+  title: string;
+  departmentId?: string;
+  seniority?: string;
+  type: string;
+  status: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  currency: string;
+  location?: string;
+  remote: boolean;
+  description?: string;
+  openedAt?: string;
+  closedAt?: string;
+  createdAt: string;
+}
+
+interface Candidate {
+  id: string;
+  searchId: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  stage: string;
+  source?: string;
+  createdAt: string;
+}
+
+interface RecruitmentStats {
+  totalSearches: number;
+  openSearches: number;
+  totalCandidates: number;
+  byStageCounts: Record<string, number>;
+  byStatusCounts: Record<string, number>;
+}
 
 const STAGES = [
-  { id: 'SOURCING', label: 'Sourcing', color: 'bg-navy-100 text-navy-700', count: 0 },
-  { id: 'SCREENING', label: 'Screening', color: 'bg-blue-100 text-blue-700', count: 0 },
-  { id: 'INTERVIEW', label: 'Entrevistas', color: 'bg-purple-100 text-purple-700', count: 0 },
-  { id: 'OFFER', label: 'Oferta', color: 'bg-amber-100 text-amber-700', count: 0 },
-  { id: 'HIRED', label: 'Contratado', color: 'bg-green-100 text-green-700', count: 0 },
+  { id: 'SOURCING', label: 'Sourcing', color: 'bg-navy-100 text-navy-700' },
+  { id: 'SCREENING', label: 'Screening', color: 'bg-blue-100 text-blue-700' },
+  { id: 'INTERVIEW', label: 'Entrevistas', color: 'bg-purple-100 text-purple-700' },
+  { id: 'TECHNICAL', label: 'Técnico', color: 'bg-indigo-100 text-indigo-700' },
+  { id: 'OFFER', label: 'Oferta', color: 'bg-amber-100 text-amber-700' },
+  { id: 'HIRED', label: 'Contratado', color: 'bg-green-100 text-green-700' },
 ];
 
-const MOCK_SEARCHES = [
-  {
-    id: '1',
-    title: 'Desarrollador Full Stack Sr.',
-    department: 'Tecnología',
-    type: 'INDEFINIDO',
-    status: 'OPEN',
-    candidates: 12,
-    remote: true,
-  },
-  {
-    id: '2',
-    title: 'Analista de RRHH',
-    department: 'Recursos Humanos',
-    type: 'INDEFINIDO',
-    status: 'OPEN',
-    candidates: 8,
-    remote: false,
-  },
-  {
-    id: '3',
-    title: 'Diseñador UX/UI',
-    department: 'Producto',
-    type: 'PLAZO_FIJO',
-    status: 'PAUSED',
-    candidates: 5,
-    remote: true,
-  },
-];
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; variant: 'success' | 'warning' | 'default' | 'danger' }
+> = {
+  OPEN: { label: 'Activa', variant: 'success' },
+  PAUSED: { label: 'Pausada', variant: 'warning' },
+  CLOSED: { label: 'Cerrada', variant: 'default' },
+  FILLED: { label: 'Cubierta', variant: 'success' },
+};
+
+const CONTRACT_LABELS: Record<string, string> = {
+  INDEFINIDO: 'Indefinido',
+  PLAZO_FIJO: 'Plazo fijo',
+  TEMPORADA: 'Temporada',
+  PASANTIA: 'Pasantía',
+  EVENTUAL: 'Eventual',
+};
 
 export function RecruitmentPage() {
+  const { data: stats } = useQuery({
+    queryKey: ['recruitment-stats'],
+    queryFn: async () => {
+      const r = await apiClient.get<{ success: boolean; data: RecruitmentStats }>(
+        '/api/recruitment/stats',
+      );
+      return r.data.data;
+    },
+  });
+
+  const { data: searchesData, isLoading: loadingSearches } = useQuery({
+    queryKey: ['recruitment-searches'],
+    queryFn: async () => {
+      const r = await apiClient.get<{
+        success: boolean;
+        data: RecruitmentSearch[];
+        meta: { total: number };
+      }>('/api/recruitment/searches', { params: { limit: 50 } });
+      return r.data;
+    },
+  });
+
+  const { data: recentCandidates } = useQuery({
+    queryKey: ['recruitment-candidates-recent'],
+    queryFn: async () => {
+      const r = await apiClient.get<{ success: boolean; data: Candidate[] }>(
+        '/api/recruitment/candidates',
+        { params: { limit: 20 } },
+      );
+      return r.data.data ?? [];
+    },
+  });
+
+  const searches = searchesData?.data ?? [];
+  const candidatesByStage = stats?.byStageCounts ?? {};
+
+  const hiredThisMonth = (recentCandidates ?? []).filter((c) => {
+    if (c.stage !== 'HIRED') return false;
+    const d = new Date(c.createdAt);
+    const now = new Date();
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -52,21 +126,57 @@ export function RecruitmentPage() {
         </Button>
       </div>
 
-      {/* Pipeline kanban */}
-      <div className="grid grid-cols-5 gap-3">
-        {STAGES.map((stage) => (
-          <div key={stage.id} className="border-border rounded-xl border bg-white p-3 shadow-sm">
-            <div
-              className={`mb-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${stage.color}`}
-            >
-              {stage.label}
+      {/* Pipeline kanban — counts by stage */}
+      <div className="grid grid-cols-3 gap-3 lg:grid-cols-6">
+        {STAGES.map((stage) => {
+          const count = candidatesByStage[stage.id] ?? 0;
+          return (
+            <div key={stage.id} className="border-border rounded-xl border bg-white p-4 shadow-sm">
+              <span
+                className={`mb-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${stage.color}`}
+              >
+                {stage.label}
+              </span>
+              <p className="text-navy-900 text-2xl font-bold">{count}</p>
+              <p className="text-navy-400 text-xs">candidatos</p>
             </div>
-            <p className="text-navy-900 text-2xl font-bold">{stage.count}</p>
-            <p className="text-navy-400 text-xs">candidatos</p>
-            <div className="border-border mt-3 flex min-h-[60px] items-center justify-center rounded-lg border-2 border-dashed">
-              <p className="text-navy-300 text-xs">Sin candidatos</p>
-            </div>
-          </div>
+          );
+        })}
+      </div>
+
+      {/* KPI stats */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          {
+            icon: Briefcase,
+            label: 'Búsquedas abiertas',
+            value: stats ? String(stats.openSearches) : '—',
+            color: 'bg-blue-50 text-blue-600',
+          },
+          {
+            icon: Users,
+            label: 'Total de candidatos',
+            value: stats ? String(stats.totalCandidates) : '—',
+            color: 'bg-navy-50 text-navy-600',
+          },
+          {
+            icon: CheckCircle,
+            label: 'Contrataciones este mes',
+            value: String(hiredThisMonth),
+            color: 'bg-green-50 text-green-600',
+          },
+        ].map(({ icon: Icon, label, value, color }) => (
+          <Card key={label}>
+            <CardContent className="flex items-center gap-4 py-5">
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${color}`}>
+                <Icon size={20} />
+              </div>
+              <div>
+                <p className="text-navy-900 text-2xl font-bold">{value}</p>
+                <p className="text-navy-500 text-sm">{label}</p>
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
@@ -75,68 +185,75 @@ export function RecruitmentPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search size={16} className="text-navy-500" />
-            Búsquedas activas
+            Búsquedas
           </CardTitle>
+          <span className="text-navy-400 text-sm">{searchesData?.meta.total ?? 0} registros</span>
         </CardHeader>
         <div className="divide-border divide-y">
-          {MOCK_SEARCHES.map((s) => (
-            <div
-              key={s.id}
-              className="hover:bg-surface flex cursor-pointer items-center justify-between px-6 py-4 transition-colors"
-            >
-              <div className="flex items-start gap-3">
-                <div className="bg-navy-50 flex h-10 w-10 items-center justify-center rounded-xl">
-                  <Star size={18} className="text-navy-500" />
+          {loadingSearches ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between px-6 py-4">
+                <div className="space-y-2">
+                  <div className="bg-surface-hover h-4 w-48 animate-pulse rounded" />
+                  <div className="bg-surface-hover h-3 w-32 animate-pulse rounded" />
                 </div>
-                <div>
-                  <p className="text-navy-900 font-medium">{s.title}</p>
-                  <p className="text-navy-500 text-sm">
-                    {s.department} · {s.type === 'INDEFINIDO' ? 'Indefinido' : 'Plazo fijo'}{' '}
-                    {s.remote && '· Remoto'}
-                  </p>
-                </div>
+                <div className="bg-surface-hover h-6 w-20 animate-pulse rounded-full" />
               </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-navy-900 text-sm font-semibold">{s.candidates}</p>
-                  <p className="text-navy-400 text-xs">candidatos</p>
-                </div>
-                <Badge variant={s.status === 'OPEN' ? 'success' : 'warning'} size="sm" dot>
-                  {s.status === 'OPEN' ? 'Activa' : 'Pausada'}
-                </Badge>
-              </div>
-            </div>
-          ))}
-          {MOCK_SEARCHES.length === 0 && (
+            ))
+          ) : searches.length === 0 ? (
             <CardContent>
-              <p className="text-navy-400 py-8 text-center text-sm">Sin búsquedas activas</p>
+              <div className="py-12 text-center">
+                <UserPlus size={32} className="text-navy-200 mx-auto mb-2" />
+                <p className="text-navy-400 text-sm">Sin búsquedas registradas</p>
+              </div>
             </CardContent>
+          ) : (
+            searches.map((s) => {
+              const statusCfg = STATUS_CONFIG[s.status] ?? {
+                label: s.status,
+                variant: 'default' as const,
+              };
+              return (
+                <div
+                  key={s.id}
+                  className="hover:bg-surface flex cursor-pointer items-center justify-between px-6 py-4 transition-colors"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-navy-900 font-medium">{s.title}</p>
+                      {s.remote && (
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                          Remoto
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-navy-500 text-sm">
+                      {CONTRACT_LABELS[s.type] ?? s.type}
+                      {s.seniority && ` · ${s.seniority}`}
+                      {s.location && ` · ${s.location}`}
+                    </p>
+                    {(s.salaryMin || s.salaryMax) && (
+                      <p className="text-navy-400 mt-0.5 text-xs">
+                        {s.currency} {s.salaryMin ? s.salaryMin.toLocaleString('es-AR') : '?'} –{' '}
+                        {s.salaryMax ? s.salaryMax.toLocaleString('es-AR') : '?'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <p className="text-navy-400 text-xs">
+                      <Clock size={10} className="mr-1 inline" />
+                      {formatDistanceToNow(new Date(s.createdAt), { addSuffix: true, locale: es })}
+                    </p>
+                    <Badge variant={statusCfg.variant} size="sm" dot>
+                      {statusCfg.label}
+                    </Badge>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </Card>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { icon: Clock, label: 'Tiempo promedio de contratación', value: '—', sub: 'días' },
-          { icon: CheckCircle, label: 'Tasa de aceptación de ofertas', value: '—', sub: '%' },
-          { icon: UserPlus, label: 'Contrataciones este mes', value: '—', sub: 'empleados' },
-        ].map(({ icon: Icon, label, value, sub }) => (
-          <Card key={label}>
-            <CardContent className="flex items-center gap-4 py-5">
-              <div className="bg-navy-50 text-navy-600 flex h-12 w-12 items-center justify-center rounded-xl">
-                <Icon size={20} />
-              </div>
-              <div>
-                <p className="text-navy-900 text-2xl font-bold">
-                  {value} <span className="text-navy-400 text-sm font-normal">{sub}</span>
-                </p>
-                <p className="text-navy-500 text-sm">{label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }
