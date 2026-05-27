@@ -1,7 +1,6 @@
-// ARHIA — Prisma Schema
-// Multi-tenant: schema_{company_id} per tenant
-// Public schema contains: companies, users (global)
-// Tenant schemas contain everything else
+// ARHIA — Prisma Schema v2
+// Multi-tenant: public schema (global) + tenant schema (per-company data)
+// At runtime, tenant schema is routed via SET search_path or connection URL
 
 generator client {
   provider        = "prisma-client-js"
@@ -11,28 +10,31 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public"]
+  schemas  = ["public", "tenant"]
 }
 
-// ─── PUBLIC SCHEMA (global) ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// PUBLIC SCHEMA — global multi-tenant registry
+// ═══════════════════════════════════════════════════════════════════════════════
 
 model Company {
-  id           String      @id @default(uuid())
-  name         String
-  legalName    String
-  cuit         String      @unique
-  industry     String?
-  size         CompanySize @default(SMALL)
-  plan         PlanTier    @default(STARTER)
+  id            String      @id @default(uuid())
+  name          String
+  legalName     String
+  cuit          String      @unique
+  industry      String?
+  size          CompanySize @default(SMALL)
+  plan          PlanTier    @default(STARTER)
   planExpiresAt DateTime?
-  tenantSchema String      @unique
-  logoUrl      String?
-  phone        String?
-  website      String?
-  isActive     Boolean     @default(true)
-  settings     Json        @default("{}")
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  tenantSchema  String      @unique
+  logoUrl       String?
+  phone         String?
+  address       String?
+  website       String?
+  isActive      Boolean     @default(true)
+  settings      Json        @default("{}")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   users User[]
 
@@ -56,8 +58,8 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sessions     Session[]
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessions Session[]
 
   @@index([companyId])
   @@index([email])
@@ -82,7 +84,561 @@ model Session {
   @@schema("public")
 }
 
-// ─── ENUMS ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// TENANT SCHEMA — company-specific HR data
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model Department {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  code        String?
+  description String?
+  headcount   Int      @default(0)
+  budget      Decimal? @db.Decimal(15, 2)
+  costCenter  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  managerId String?
+  manager   Employee?  @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees Employee[] @relation("DepartmentEmployees")
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("departments")
+  @@schema("tenant")
+}
+
+model Employee {
+  id               String           @id @default(uuid())
+  companyId        String
+  userId           String?
+  departmentId     String?
+  legajo           String?
+  firstName        String
+  lastName         String
+  email            String
+  phone            String?
+  dni              String?
+  cuil             String?
+  birthDate        DateTime?
+  hireDate         DateTime
+  terminationDate  DateTime?
+  position         String
+  seniority        String?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  contractType     ContractType     @default(INDEFINIDO)
+  salary           Decimal          @db.Decimal(15, 2)
+  currency         String           @default("ARS")
+  cct              String?
+  cctCategory      String?
+  gender           Gender?
+  avatarUrl        String?
+  address          String?
+  city             String?
+  province         String?
+  emergencyContact Json?
+  bankAccount      Json?
+  documents        Json             @default("{}")
+  vacationDays     Int              @default(14)
+  usedVacationDays Int              @default(0)
+  isActive         Boolean          @default(true)
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  department Department? @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+
+  managedDepartments Department[]        @relation("DepartmentManager")
+  contracts          Contract[]
+  attendanceRecords  AttendanceRecord[]
+  leaveRequests      LeaveRequest[]
+  payrollRecords     PayrollRecord[]
+  performanceReviews PerformanceReview[] @relation("EmployeeReviews")
+  conductedReviews   PerformanceReview[] @relation("ReviewerConducted")
+  riskScores         RiskScore[]
+  recognitions       Recognition[]       @relation("RecognitionRecipient")
+  givenRecognitions  Recognition[]       @relation("RecognitionGiver")
+  trainingPlans      TrainingEnrollment[]
+  auditLogs          AuditLog[]
+
+  @@unique([companyId, email])
+  @@unique([companyId, legajo])
+  @@index([companyId])
+  @@index([departmentId])
+  @@index([employmentStatus])
+  @@map("employees")
+  @@schema("tenant")
+}
+
+model Contract {
+  id             String         @id @default(uuid())
+  companyId      String
+  employeeId     String
+  type           ContractType
+  status         ContractStatus @default(DRAFT)
+  startDate      DateTime
+  endDate        DateTime?
+  position       String
+  salary         Decimal        @db.Decimal(15, 2)
+  currency       String         @default("ARS")
+  cct            String?
+  cctCategory    String?
+  workingHours   Int            @default(48)
+  trialPeriod    Int?
+  fileUrl        String?
+  signedAt       DateTime?
+  signerName     String?
+  notes          String?
+  legalBasis     String?
+  complianceData Json           @default("{}")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([endDate])
+  @@map("contracts")
+  @@schema("tenant")
+}
+
+model AttendanceRecord {
+  id          String           @id @default(uuid())
+  companyId   String
+  employeeId  String
+  date        DateTime         @db.Date
+  status      AttendanceStatus @default(PRESENT)
+  checkIn     DateTime?
+  checkOut    DateTime?
+  hoursWorked Decimal?         @db.Decimal(5, 2)
+  overtime    Decimal?         @db.Decimal(5, 2)
+  source      String?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, employeeId, date])
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([date])
+  @@map("attendance_records")
+  @@schema("tenant")
+}
+
+model LeaveRequest {
+  id          String      @id @default(uuid())
+  companyId   String
+  employeeId  String
+  type        LeaveType
+  status      LeaveStatus @default(PENDING)
+  startDate   DateTime    @db.Date
+  endDate     DateTime    @db.Date
+  days        Int
+  reason      String?
+  approvedBy  String?
+  approvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_requests")
+  @@schema("tenant")
+}
+
+model PayrollRecord {
+  id              String   @id @default(uuid())
+  companyId       String
+  employeeId      String
+  period          String
+  periodYear      Int
+  periodMonth     Int
+  grossSalary     Decimal  @db.Decimal(15, 2)
+  jubilacion      Decimal  @db.Decimal(15, 2)
+  obraSocial      Decimal  @db.Decimal(15, 2)
+  anssal          Decimal  @db.Decimal(15, 2)
+  ley19032        Decimal  @db.Decimal(15, 2)
+  totalDeductions Decimal  @db.Decimal(15, 2)
+  netSalary       Decimal  @db.Decimal(15, 2)
+  extras          Json     @default("[]")
+  status          String   @default("DRAFT")
+  processedAt     DateTime?
+  paidAt          DateTime?
+  currency        String   @default("ARS")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  employee   Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  anomalies  PayrollAnomaly[]
+
+  @@unique([companyId, employeeId, periodYear, periodMonth])
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([periodYear, periodMonth])
+  @@map("payroll_records")
+  @@schema("tenant")
+}
+
+model PayrollAnomaly {
+  id              String   @id @default(uuid())
+  companyId       String
+  payrollRecordId String
+  type            String
+  severity        String   @default("MEDIUM")
+  description     String
+  amount          Decimal? @db.Decimal(15, 2)
+  resolved        Boolean  @default(false)
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  createdAt       DateTime @default(now())
+
+  payrollRecord PayrollRecord @relation(fields: [payrollRecordId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([payrollRecordId])
+  @@index([resolved])
+  @@map("payroll_anomalies")
+  @@schema("tenant")
+}
+
+model PerformanceReview {
+  id                String            @id @default(uuid())
+  companyId         String
+  employeeId        String
+  reviewerId        String?
+  period            String
+  type              String            @default("ANNUAL")
+  status            String            @default("PENDING")
+  score             Int?
+  potential         PerformancePotential?
+  goals             Json              @default("[]")
+  competencies      Json              @default("{}")
+  strengths         String[]
+  improvements      String[]
+  developmentPlan   String?
+  comments          String?
+  employeeComments  String?
+  submittedAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  employee Employee  @relation("EmployeeReviews", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewer Employee? @relation("ReviewerConducted", fields: [reviewerId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([period])
+  @@map("performance_reviews")
+  @@schema("tenant")
+}
+
+model RiskScore {
+  id                 String    @id @default(uuid())
+  companyId          String
+  employeeId         String
+  level              RiskLevel
+  overallScore       Int
+  burnoutScore       Int       @default(0)
+  flightRiskScore    Int       @default(0)
+  engagementScore    Int       @default(0)
+  satisfactionScore  Int       @default(0)
+  factors            Json      @default("[]")
+  trend              String    @default("STABLE")
+  aiAnalysis         String?
+  recommendations    Json      @default("[]")
+  calculatedAt       DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([level])
+  @@index([calculatedAt])
+  @@map("risk_scores")
+  @@schema("tenant")
+}
+
+model ChatThread {
+  id          String   @id @default(uuid())
+  companyId   String
+  userId      String
+  employeeId  String?
+  title       String?
+  mode        ChatMode @default(ASSISTANT)
+  isActive    Boolean  @default(true)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages ChatMessage[]
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([mode])
+  @@map("chat_threads")
+  @@schema("tenant")
+}
+
+model ChatMessage {
+  id          String      @id @default(uuid())
+  companyId   String
+  threadId    String
+  role        MessageRole
+  content     String      @db.Text
+  metadata    Json        @default("{}")
+  inputTokens Int?
+  outputTokens Int?
+  createdAt   DateTime    @default(now())
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([companyId])
+  @@map("chat_messages")
+  @@schema("tenant")
+}
+
+model AutomationRule {
+  id           String            @id @default(uuid())
+  companyId    String
+  name         String
+  description  String?
+  trigger      AutomationTrigger
+  triggerConfig Json             @default("{}")
+  actions      Json              @default("[]")
+  status       AutomationStatus  @default(ACTIVE)
+  lastRunAt    DateTime?
+  nextRunAt    DateTime?
+  runCount     Int               @default(0)
+  errorCount   Int               @default(0)
+  tags         String[]
+  createdBy    String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  executions AutomationExecution[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([trigger])
+  @@map("automation_rules")
+  @@schema("tenant")
+}
+
+model AutomationExecution {
+  id           String   @id @default(uuid())
+  companyId    String
+  automationId String
+  status       String   @default("SUCCESS")
+  triggeredBy  String?
+  result       Json     @default("{}")
+  errorMessage String?
+  duration     Int?
+  executedAt   DateTime @default(now())
+
+  automation AutomationRule @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([automationId])
+  @@index([executedAt])
+  @@map("automation_executions")
+  @@schema("tenant")
+}
+
+model TrainingPlan {
+  id          String   @id @default(uuid())
+  companyId   String
+  title       String
+  description String?
+  type        String   @default("SKILL")
+  provider    String?
+  skills      String[]
+  duration    Int?
+  durationUnit String  @default("HOURS")
+  cost        Decimal? @db.Decimal(15, 2)
+  currency    String   @default("ARS")
+  url         String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  enrollments TrainingEnrollment[]
+
+  @@index([companyId])
+  @@map("training_plans")
+  @@schema("tenant")
+}
+
+model TrainingEnrollment {
+  id          String         @id @default(uuid())
+  companyId   String
+  employeeId  String
+  planId      String
+  status      TrainingStatus @default(PENDING)
+  progress    Int            @default(0)
+  startDate   DateTime?
+  completedAt DateTime?
+  score       Int?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  employee Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  plan     TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, employeeId, planId])
+  @@index([companyId])
+  @@index([employeeId])
+  @@map("training_enrollments")
+  @@schema("tenant")
+}
+
+model RecruitmentSearch {
+  id           String            @id @default(uuid())
+  companyId    String
+  departmentId String?
+  title        String
+  seniority    String?
+  type         ContractType      @default(INDEFINIDO)
+  status       RecruitmentStatus @default(OPEN)
+  salaryMin    Decimal?          @db.Decimal(15, 2)
+  salaryMax    Decimal?          @db.Decimal(15, 2)
+  currency     String            @default("ARS")
+  requirements Json              @default("[]")
+  competencies Json              @default("[]")
+  description  String?
+  location     String?
+  remote       Boolean           @default(false)
+  openedAt     DateTime          @default(now())
+  closedAt     DateTime?
+  createdBy    String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  candidates Candidate[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("recruitment_searches")
+  @@schema("tenant")
+}
+
+model Candidate {
+  id          String         @id @default(uuid())
+  companyId   String
+  searchId    String
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  linkedinUrl String?
+  cvUrl       String?
+  stage       CandidateStage @default(SOURCING)
+  score       Int?
+  aiScore     Int?
+  source      String?
+  salary      Decimal?       @db.Decimal(15, 2)
+  currency    String         @default("ARS")
+  notes       String?
+  aiAnalysis  String?
+  skills      Json           @default("[]")
+  interviews  Json           @default("[]")
+  hiredAt     DateTime?
+  rejectedAt  DateTime?
+  rejectionReason String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  search RecruitmentSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([searchId])
+  @@index([stage])
+  @@map("candidates")
+  @@schema("tenant")
+}
+
+model Recognition {
+  id          String          @id @default(uuid())
+  companyId   String
+  giverId     String
+  recipientId String
+  type        RecognitionType
+  title       String
+  message     String
+  isPublic    Boolean         @default(true)
+  points      Int             @default(0)
+  createdAt   DateTime        @default(now())
+
+  giver     Employee @relation("RecognitionGiver", fields: [giverId], references: [id])
+  recipient Employee @relation("RecognitionRecipient", fields: [recipientId], references: [id])
+
+  @@index([companyId])
+  @@index([recipientId])
+  @@index([giverId])
+  @@map("recognitions")
+  @@schema("tenant")
+}
+
+model Integration {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  slug        String
+  category    String
+  isConnected Boolean  @default(false)
+  config      Json     @default("{}")
+  lastSyncAt  DateTime?
+  status      String   @default("INACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, slug])
+  @@index([companyId])
+  @@map("integrations")
+  @@schema("tenant")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  companyId  String
+  userId     String?
+  employeeId String?
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+  @@schema("tenant")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENUMS — PUBLIC SCHEMA
+// ═══════════════════════════════════════════════════════════════════════════════
 
 enum UserRole {
   SUPER_ADMIN
@@ -109,4 +665,176 @@ enum CompanySize {
   LARGE
 
   @@schema("public")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENUMS — TENANT SCHEMA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+
+  @@schema("tenant")
+}
+
+enum ContractType {
+  INDEFINIDO
+  PLAZO_FIJO
+  TEMPORADA
+  PASANTIA
+  EVENTUAL
+
+  @@schema("tenant")
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_SIGNATURE
+  ACTIVE
+  EXPIRED
+  TERMINATED
+
+  @@schema("tenant")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  REMOTE
+  HOLIDAY
+  LEAVE
+
+  @@schema("tenant")
+}
+
+enum LeaveType {
+  VACACIONES
+  ENFERMEDAD
+  LICENCIA_PERSONAL
+  LICENCIA_MATERNIDAD
+  LICENCIA_PATERNIDAD
+  ESTUDIO
+  DUELO
+
+  @@schema("tenant")
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@schema("tenant")
+}
+
+enum Gender {
+  MASCULINO
+  FEMENINO
+  NO_BINARIO
+  PREFIERO_NO_DECIR
+
+  @@schema("tenant")
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@schema("tenant")
+}
+
+enum ChatMode {
+  ASSISTANT
+  ANALYTICS
+  CONTRACTS
+  RECRUITMENT
+  PERFORMANCE
+  PAYROLL
+  CULTURE
+
+  @@schema("tenant")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+
+  @@schema("tenant")
+}
+
+enum AutomationStatus {
+  ACTIVE
+  PAUSED
+  INACTIVE
+
+  @@schema("tenant")
+}
+
+enum AutomationTrigger {
+  SCHEDULE
+  EVENT
+  THRESHOLD
+  MANUAL
+  WEBHOOK
+
+  @@schema("tenant")
+}
+
+enum TrainingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@schema("tenant")
+}
+
+enum RecruitmentStatus {
+  OPEN
+  PAUSED
+  CLOSED
+  FILLED
+
+  @@schema("tenant")
+}
+
+enum CandidateStage {
+  SOURCING
+  SCREENING
+  INTERVIEW
+  TECHNICAL
+  OFFER
+  HIRED
+  REJECTED
+
+  @@schema("tenant")
+}
+
+enum RecognitionType {
+  LOGRO
+  ANTIGUEDAD
+  COMPANERO
+  LIDERAZGO
+  INNOVACION
+  CLIENTE
+
+  @@schema("tenant")
+}
+
+enum PerformancePotential {
+  LOW
+  MEDIUM
+  HIGH
+  STAR
+
+  @@schema("tenant")
 }
