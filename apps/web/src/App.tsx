@@ -12,6 +12,7 @@ import { ChatPage } from '@/pages/ChatPage';
 import { ContractsPage } from '@/pages/ContractsPage';
 import { CulturePage } from '@/pages/CulturePage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { EmployeeDetailPage } from '@/pages/EmployeeDetailPage';
 import { EmployeesPage } from '@/pages/EmployeesPage';
 import { IntegrationsPage } from '@/pages/IntegrationsPage';
 import { PayrollPage } from '@/pages/PayrollPage';
@@ -55,6 +56,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="employees" element={<EmployeesPage />} />
+            <Route path="employees/:id" element={<EmployeeDetailPage />} />
             <Route path="risk" element={<RiskPage />} />
             <Route path="recruitment" element={<RecruitmentPage />} />
             <Route path="performance" element={<PerformancePage />} />

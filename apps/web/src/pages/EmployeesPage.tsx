@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Search, UserPlus, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { CreateEmployeeModal } from '@/components/modules/employees/CreateEmployeeModal';
 import { employeesService, type EmployeeListItem } from '@/services/employees';
@@ -56,6 +57,7 @@ export function EmployeesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const navigate = useNavigate();
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -170,7 +172,11 @@ export function EmployeesPage() {
                 };
 
                 return (
-                  <tr key={emp.id} className="hover:bg-surface cursor-pointer transition-colors">
+                  <tr
+                    key={emp.id}
+                    className="hover:bg-surface cursor-pointer transition-colors"
+                    onClick={() => navigate(`/employees/${emp.id}`)}
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar employee={emp} />
