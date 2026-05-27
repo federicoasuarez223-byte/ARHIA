@@ -1,9 +1,117 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@arhia/ui';
-import { useQuery } from '@tanstack/react-query';
-import { DollarSign, Download, TrendingUp, Users, ChevronDown, ChevronRight } from 'lucide-react';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Modal } from '@arhia/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  DollarSign,
+  TrendingUp,
+  Users,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Loader2,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import apiClient from '@/services/api';
+import { toast } from '@/store/toast.store';
+
+// ── Generate modal ────────────────────────────────────────────────────────────
+
+const MONTH_NAMES = [
+  '',
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+];
+
+function GenerateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      apiClient.post('/api/payroll/generate', { periodYear: year, periodMonth: month }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payroll-records'] });
+      qc.invalidateQueries({ queryKey: ['payroll-stats'] });
+      toast.success(`Liquidación ${MONTH_NAMES[month]} ${year} generada`);
+      onClose();
+    },
+    onError: () => toast.error('No se pudo generar la liquidación.'),
+  });
+
+  const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Generar liquidación"
+      description="Se calculará el sueldo neto de todos los empleados activos para el período seleccionado."
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Plus size={14} />
+            )}
+            {mutation.isPending ? 'Generando...' : 'Generar'}
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-navy-700 mb-1.5 block text-sm font-medium">Mes</label>
+          <select
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+            className="border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1"
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>
+                {MONTH_NAMES[m]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-navy-700 mb-1.5 block text-sm font-medium">Año</label>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1"
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 interface PayrollRecord {
   id: string;
@@ -47,21 +155,7 @@ interface PeriodGroup {
   status: string;
 }
 
-const MONTHS = [
-  '',
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
-];
+const MONTHS = MONTH_NAMES;
 
 const STATUS_CFG: Record<string, { label: string; variant: 'success' | 'warning' | 'default' }> = {
   PAID: { label: 'Pagado', variant: 'success' },
@@ -75,6 +169,7 @@ function fmt(n: number) {
 
 export function PayrollPage() {
   const [expandedPeriod, setExpandedPeriod] = useState<string | null>(null);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   const { data: records, isLoading } = useQuery({
     queryKey: ['payroll-records'],
@@ -132,8 +227,8 @@ export function PayrollPage() {
           <h1 className="font-display text-navy-900 text-2xl font-bold">Liquidaciones</h1>
           <p className="text-navy-500 mt-1 text-sm">Gestión de sueldos y recibos de haberes</p>
         </div>
-        <Button variant="outline" size="sm">
-          <Download size={16} /> Exportar
+        <Button variant="primary" size="sm" onClick={() => setShowGenerate(true)}>
+          <Plus size={16} /> Generar liquidación
         </Button>
       </div>
 
@@ -325,6 +420,8 @@ export function PayrollPage() {
           Próximamente: integración con AFIP y exportación F931 para declaraciones mensuales.
         </p>
       </div>
+
+      <GenerateModal open={showGenerate} onClose={() => setShowGenerate(false)} />
     </div>
   );
 }

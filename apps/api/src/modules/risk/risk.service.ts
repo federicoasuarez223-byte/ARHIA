@@ -4,6 +4,119 @@ import type { ListRiskDto } from './risk.schemas';
 
 import { prisma } from '@/config/database';
 
+// ─── Risk calculation ─────────────────────────────────────────────────────────
+
+function toLevel(score: number): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+  if (score >= 70) return 'CRITICAL';
+  if (score >= 50) return 'HIGH';
+  if (score >= 30) return 'MEDIUM';
+  return 'LOW';
+}
+
+export async function calculateRiskForAll(companyId: string) {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const [employees, absenceCounts] = await Promise.all([
+    prisma.employee.findMany({
+      where: { companyId, isActive: true, employmentStatus: 'ACTIVE' },
+      select: {
+        id: true,
+        hireDate: true,
+        contractType: true,
+        employmentStatus: true,
+        seniority: true,
+      },
+    }),
+    prisma.attendanceRecord.groupBy({
+      by: ['employeeId'],
+      where: { companyId, status: 'ABSENT', date: { gte: sixMonthsAgo } },
+      _count: { id: true },
+    }),
+  ]);
+
+  const absenceMap = new Map(absenceCounts.map((a) => [a.employeeId, a._count.id]));
+
+  const previousScores = await prisma.riskScore.findMany({
+    where: { companyId },
+    orderBy: { calculatedAt: 'desc' },
+    select: { employeeId: true, overallScore: true, calculatedAt: true },
+  });
+  const prevMap = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const s of previousScores) {
+    if (!seen.has(s.employeeId)) {
+      prevMap.set(s.employeeId, s.overallScore);
+      seen.add(s.employeeId);
+    }
+  }
+
+  const created = await Promise.all(
+    employees.map(async (emp) => {
+      const tenureMonths = Math.floor(
+        (now.getTime() - new Date(emp.hireDate).getTime()) / (1000 * 60 * 60 * 24 * 30),
+      );
+
+      // Flight risk: very low tenure or temporary contracts increase risk
+      const tenureRisk = tenureMonths < 6 ? 60 : tenureMonths < 24 ? 30 : 15;
+      const contractRisk =
+        emp.contractType === 'PLAZO_FIJO' || emp.contractType === 'TEMPORADA' ? 25 : 0;
+      const pasantiaRisk =
+        emp.contractType === 'PASANTIA' || emp.contractType === 'EVENTUAL' ? 35 : 0;
+      const flightRiskScore = Math.min(100, tenureRisk + contractRisk + pasantiaRisk);
+
+      // Burnout risk: absences drive this
+      const absences = absenceMap.get(emp.id) ?? 0;
+      const burnoutScore = Math.min(100, absences * 8);
+
+      // Engagement score: inverse of flight risk, modified by seniority
+      const seniorityBonus =
+        emp.seniority === 'SENIOR' || emp.seniority === 'LEAD' || emp.seniority === 'MANAGER'
+          ? 15
+          : 0;
+      const engagementScore = Math.max(
+        0,
+        100 - flightRiskScore * 0.6 - burnoutScore * 0.2 + seniorityBonus,
+      );
+
+      // Satisfaction: rough heuristic
+      const satisfactionScore = Math.max(0, 100 - burnoutScore * 0.5 - flightRiskScore * 0.3);
+
+      const overallScore = Math.round(
+        flightRiskScore * 0.4 + burnoutScore * 0.35 + (100 - engagementScore) * 0.25,
+      );
+
+      const prev = prevMap.get(emp.id);
+      const trend =
+        prev === undefined
+          ? 'STABLE'
+          : overallScore > prev + 5
+            ? 'WORSENING'
+            : overallScore < prev - 5
+              ? 'IMPROVING'
+              : 'STABLE';
+
+      return prisma.riskScore.create({
+        data: {
+          companyId,
+          employeeId: emp.id,
+          level: toLevel(overallScore),
+          overallScore,
+          burnoutScore: Math.round(burnoutScore),
+          flightRiskScore: Math.round(flightRiskScore),
+          engagementScore: Math.round(engagementScore),
+          satisfactionScore: Math.round(satisfactionScore),
+          trend,
+          calculatedAt: now,
+        },
+      });
+    }),
+  );
+
+  return { calculated: created.length };
+}
+
 export class RiskError extends Error {
   constructor(
     public code: string,

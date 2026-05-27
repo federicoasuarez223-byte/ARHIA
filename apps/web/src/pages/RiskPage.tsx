@@ -1,8 +1,17 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@arhia/ui';
-import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, TrendingDown, TrendingUp, Minus, Users } from 'lucide-react';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@arhia/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  AlertTriangle,
+  TrendingDown,
+  TrendingUp,
+  Minus,
+  Users,
+  RefreshCw,
+  Loader2,
+} from 'lucide-react';
 
 import apiClient from '@/services/api';
+import { toast } from '@/store/toast.store';
 
 interface RiskScore {
   id: string;
@@ -62,6 +71,20 @@ function TrendIcon({ trend }: { trend: string }) {
 }
 
 export function RiskPage() {
+  const qc = useQueryClient();
+
+  const recalcMutation = useMutation({
+    mutationFn: () =>
+      apiClient.post<{ success: boolean; data: { calculated: number } }>('/api/risk/calculate'),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['risk-scores'] });
+      qc.invalidateQueries({ queryKey: ['risk-stats'] });
+      qc.invalidateQueries({ queryKey: ['employee-stats'] });
+      toast.success(`Riesgo recalculado para ${r.data.data.calculated} empleados`);
+    },
+    onError: () => toast.error('No se pudo recalcular el riesgo.'),
+  });
+
   const { data: scoresData, isLoading } = useQuery({
     queryKey: ['risk-scores'],
     queryFn: async () => {
@@ -87,9 +110,24 @@ export function RiskPage() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div>
-        <h1 className="font-display text-navy-900 text-2xl font-bold">Riesgo</h1>
-        <p className="text-navy-500 mt-1 text-sm">Monitoreo de riesgo y bienestar del equipo</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-navy-900 text-2xl font-bold">Riesgo</h1>
+          <p className="text-navy-500 mt-1 text-sm">Monitoreo de riesgo y bienestar del equipo</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => recalcMutation.mutate()}
+          disabled={recalcMutation.isPending}
+        >
+          {recalcMutation.isPending ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          {recalcMutation.isPending ? 'Calculando...' : 'Recalcular riesgos'}
+        </Button>
       </div>
 
       {/* Summary cards */}
