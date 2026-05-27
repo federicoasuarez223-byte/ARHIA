@@ -4,10 +4,22 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { AttendancePage } from '@/pages/AttendancePage';
 import { LoginPage } from '@/pages/auth/LoginPage';
+import { AutomationPage } from '@/pages/AutomationPage';
+import { ChatPage } from '@/pages/ChatPage';
+import { ContractsPage } from '@/pages/ContractsPage';
+import { CulturePage } from '@/pages/CulturePage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { EmployeesPage } from '@/pages/EmployeesPage';
-import { ChatPage } from '@/pages/ChatPage';
+import { IntegrationsPage } from '@/pages/IntegrationsPage';
+import { PayrollPage } from '@/pages/PayrollPage';
+import { PerformancePage } from '@/pages/PerformancePage';
+import { RecruitmentPage } from '@/pages/RecruitmentPage';
+import { ReportsPage } from '@/pages/ReportsPage';
+import { RiskPage } from '@/pages/RiskPage';
+import { SettingsPage } from '@/pages/SettingsPage';
+import { TrainingPage } from '@/pages/TrainingPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,8 +54,19 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="employees" element={<EmployeesPage />} />
+            <Route path="risk" element={<RiskPage />} />
+            <Route path="recruitment" element={<RecruitmentPage />} />
+            <Route path="performance" element={<PerformancePage />} />
+            <Route path="payroll" element={<PayrollPage />} />
+            <Route path="contracts" element={<ContractsPage />} />
+            <Route path="attendance" element={<AttendancePage />} />
+            <Route path="training" element={<TrainingPage />} />
+            <Route path="culture" element={<CulturePage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="integrations" element={<IntegrationsPage />} />
+            <Route path="automation" element={<AutomationPage />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="chat" element={<ChatPage />} />
-            {/* Remaining module routes will be added as modules are built */}
           </Route>
 
           {/* Fallback */}

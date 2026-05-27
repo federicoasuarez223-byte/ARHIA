@@ -9,9 +9,14 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { redis } from './config/redis';
 import { errorHandler, notFound } from './middlewares/error.middleware';
+import { attendanceRouter } from './modules/attendance/attendance.routes';
 import { authRouter } from './modules/auth/auth.routes';
 import { chatRouter } from './modules/chat/chat.routes';
+import { contractsRouter } from './modules/contracts/contracts.routes';
+import { departmentsRouter } from './modules/departments/departments.routes';
 import { employeesRouter } from './modules/employees/employees.routes';
+import { performanceRouter } from './modules/performance/performance.routes';
+import { riskRouter } from './modules/risk/risk.routes';
 
 export function createApp() {
   const app = express();
@@ -82,6 +87,11 @@ export function createApp() {
   // API routes
   app.use('/api/auth', authRouter);
   app.use('/api/employees', employeesRouter);
+  app.use('/api/departments', departmentsRouter);
+  app.use('/api/contracts', contractsRouter);
+  app.use('/api', attendanceRouter);
+  app.use('/api', riskRouter);
+  app.use('/api/performance', performanceRouter);
   app.use('/api/chat', chatRouter);
 
   // 404 + error handling
