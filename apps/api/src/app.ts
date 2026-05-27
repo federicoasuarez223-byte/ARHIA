@@ -17,6 +17,7 @@ import { contractsRouter } from './modules/contracts/contracts.routes';
 import { cultureRouter } from './modules/culture/culture.routes';
 import { departmentsRouter } from './modules/departments/departments.routes';
 import { employeesRouter } from './modules/employees/employees.routes';
+import { notificationsRouter } from './modules/notifications/notifications.routes';
 import { payrollRouter } from './modules/payroll/payroll.routes';
 import { performanceRouter } from './modules/performance/performance.routes';
 import { recruitmentRouter } from './modules/recruitment/recruitment.routes';
@@ -107,6 +108,7 @@ export function createApp() {
   app.use('/api/training', trainingRouter);
   app.use('/api/culture', cultureRouter);
   app.use('/api/automation', automationRouter);
+  app.use('/api/notifications', notificationsRouter);
 
   // 404 + error handling
   app.use(notFound);
