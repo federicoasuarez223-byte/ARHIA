@@ -12,7 +12,7 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
-  ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-').optional(),
+  ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-').or(z.literal('')).optional(),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
   ANTHROPIC_MAX_TOKENS: z.coerce.number().default(4096),
 

@@ -1,37 +1,36 @@
 import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { rateLimit } from 'express-rate-limit';
 
 import { env } from './config/env';
+import { logger } from './config/logger';
 import { redis } from './config/redis';
 import { errorHandler, notFound } from './middlewares/error.middleware';
-import { logger } from './config/logger';
-
-// Route imports (added as modules are built)
 import { authRouter } from './modules/auth/auth.routes';
+import { employeesRouter } from './modules/employees/employees.routes';
 
 export function createApp() {
   const app = express();
 
   // Security
-  app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-  }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // CORS
-  app.use(cors({
-    origin: [
-      'http://localhost:5173',
-      'https://app.arhia.ai',
-      /\.arhia\.ai$/,
-    ],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID'],
-  }));
+  app.use(
+    cors({
+      origin: ['http://localhost:5173', 'https://app.arhia.ai', /\.arhia\.ai$/],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID'],
+    }),
+  );
 
   // Compression
   app.use(compression());
@@ -67,7 +66,10 @@ export function createApp() {
 
   // Health check
   app.get('/health', async (_req, res) => {
-    const redisOk = await redis.ping().then(() => true).catch(() => false);
+    const redisOk = await redis
+      .ping()
+      .then(() => true)
+      .catch(() => false);
     res.json({
       status: 'ok',
       version: '1.0.0',
@@ -78,6 +80,7 @@ export function createApp() {
 
   // API routes
   app.use('/api/auth', authRouter);
+  app.use('/api/employees', employeesRouter);
 
   // 404 + error handling
   app.use(notFound);

@@ -1,8 +1,26 @@
 import { Router } from 'express';
 
+import {
+  handleLogin,
+  handleRefresh,
+  handleLogout,
+  handleLogoutAll,
+  handleMe,
+  handleRegister,
+  handleChangePassword,
+} from './auth.controller';
+
+import { authenticate } from '@/middlewares/auth.middleware';
+
 export const authRouter = Router();
 
-// Placeholder — full implementation in PASO 3
-authRouter.get('/status', (_req, res) => {
-  res.json({ success: true, data: { status: 'Auth module — coming in PASO 3' } });
-});
+// Public
+authRouter.post('/login', handleLogin);
+authRouter.post('/refresh', handleRefresh);
+authRouter.post('/logout', handleLogout);
+authRouter.post('/register', handleRegister);
+
+// Protected
+authRouter.get('/me', authenticate, handleMe);
+authRouter.post('/logout-all', authenticate, handleLogoutAll);
+authRouter.post('/change-password', authenticate, handleChangePassword);
