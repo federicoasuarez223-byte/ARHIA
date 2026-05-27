@@ -11,8 +11,10 @@ import { redis } from './config/redis';
 import { errorHandler, notFound } from './middlewares/error.middleware';
 import { attendanceRouter } from './modules/attendance/attendance.routes';
 import { authRouter } from './modules/auth/auth.routes';
+import { automationRouter } from './modules/automation/automation.routes';
 import { chatRouter } from './modules/chat/chat.routes';
 import { contractsRouter } from './modules/contracts/contracts.routes';
+import { cultureRouter } from './modules/culture/culture.routes';
 import { departmentsRouter } from './modules/departments/departments.routes';
 import { employeesRouter } from './modules/employees/employees.routes';
 import { payrollRouter } from './modules/payroll/payroll.routes';
@@ -21,6 +23,7 @@ import { recruitmentRouter } from './modules/recruitment/recruitment.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
 import { riskRouter } from './modules/risk/risk.routes';
 import { settingsRouter } from './modules/settings/settings.routes';
+import { trainingRouter } from './modules/training/training.routes';
 
 export function createApp() {
   const app = express();
@@ -101,6 +104,9 @@ export function createApp() {
   app.use('/api/reports', reportsRouter);
   app.use('/api/chat', chatRouter);
   app.use('/api/settings', settingsRouter);
+  app.use('/api/training', trainingRouter);
+  app.use('/api/culture', cultureRouter);
+  app.use('/api/automation', automationRouter);
 
   // 404 + error handling
   app.use(notFound);
