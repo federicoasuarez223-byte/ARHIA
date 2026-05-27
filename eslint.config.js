@@ -70,4 +70,10 @@ export default [
       'no-console': 'off',
     },
   },
+  {
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser },
+    },
+  },
 ];
