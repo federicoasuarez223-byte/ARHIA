@@ -18,6 +18,7 @@ import { employeesRouter } from './modules/employees/employees.routes';
 import { payrollRouter } from './modules/payroll/payroll.routes';
 import { performanceRouter } from './modules/performance/performance.routes';
 import { recruitmentRouter } from './modules/recruitment/recruitment.routes';
+import { reportsRouter } from './modules/reports/reports.routes';
 import { riskRouter } from './modules/risk/risk.routes';
 
 export function createApp() {
@@ -96,6 +97,7 @@ export function createApp() {
   app.use('/api/performance', performanceRouter);
   app.use('/api/recruitment', recruitmentRouter);
   app.use('/api/payroll', payrollRouter);
+  app.use('/api/reports', reportsRouter);
   app.use('/api/chat', chatRouter);
 
   // 404 + error handling

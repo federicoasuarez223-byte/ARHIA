@@ -1,4 +1,4 @@
-import { Badge } from '@arhia/ui';
+import { Badge, Button } from '@arhia/ui';
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -18,10 +18,12 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Pencil,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { EditEmployeeModal } from '@/components/modules/employees/EditEmployeeModal';
 import apiClient from '@/services/api';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -634,6 +636,7 @@ type TabId = (typeof TABS)[number]['id'];
 export function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [showEdit, setShowEdit] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['employee', id],
@@ -726,15 +729,21 @@ export function EmployeeDetailPage() {
               )}
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-navy-900 text-xl font-bold">
-              {Number(data.salary).toLocaleString('es-AR')}
-              <span className="text-navy-400 ml-1 text-sm font-normal">{data.currency}</span>
-            </p>
-            <p className="text-navy-400 text-xs">Salario bruto mensual</p>
-            <p className="text-navy-500 mt-2 text-xs">
-              Desde {formatDistanceToNow(new Date(data.hireDate), { addSuffix: true, locale: es })}
-            </p>
+          <div className="flex flex-col items-end gap-3">
+            <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+              <Pencil size={14} /> Editar
+            </Button>
+            <div className="text-right">
+              <p className="text-navy-900 text-xl font-bold">
+                {Number(data.salary).toLocaleString('es-AR')}
+                <span className="text-navy-400 ml-1 text-sm font-normal">{data.currency}</span>
+              </p>
+              <p className="text-navy-400 text-xs">Salario bruto mensual</p>
+              <p className="text-navy-500 mt-2 text-xs">
+                Desde{' '}
+                {formatDistanceToNow(new Date(data.hireDate), { addSuffix: true, locale: es })}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -767,6 +776,8 @@ export function EmployeeDetailPage() {
         {activeTab === 'risk' && <RiskTab employeeId={data.id} />}
         {activeTab === 'performance' && <PerformanceTab employeeId={data.id} />}
       </div>
+
+      <EditEmployeeModal open={showEdit} onClose={() => setShowEdit(false)} employee={data} />
     </div>
   );
 }
