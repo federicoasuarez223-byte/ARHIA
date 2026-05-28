@@ -1,11 +1,15 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@arhia/ui';
-import { useQuery } from '@tanstack/react-query';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Modal } from '@arhia/ui';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { TrendingUp, Plus, Star, Target, Users, CheckCircle } from 'lucide-react';
+import { TrendingUp, Plus, Star, Target, Users, CheckCircle, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import apiClient from '@/services/api';
+import { toast } from '@/store/toast.store';
 
 interface PerformanceReview {
   id: string;
@@ -58,6 +62,152 @@ const TYPE_LABELS: Record<string, string> = {
   '360': '360°',
 };
 
+const selectClass =
+  'border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1';
+const inputClass =
+  'border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1';
+const labelClass = 'text-navy-700 mb-1.5 block text-sm font-medium';
+
+const createSchema = z.object({
+  employeeId: z.string().min(1, 'Empleado requerido'),
+  period: z.string().min(1, 'Período requerido'),
+  type: z.enum(['ANNUAL', 'QUARTERLY', '180', '360']),
+  reviewerId: z.string().optional(),
+  comments: z.string().optional(),
+});
+type CreateFormValues = z.infer<typeof createSchema>;
+
+function CreatePerformanceModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+
+  const { data: employees } = useQuery({
+    queryKey: ['employees-list-mini'],
+    queryFn: async () => {
+      const r = await apiClient.get<{
+        success: boolean;
+        data: { id: string; firstName: string; lastName: string; legajo: string }[];
+      }>('/api/employees', { params: { limit: 200, sortBy: 'lastName', sortOrder: 'asc' } });
+      return r.data.data ?? [];
+    },
+    enabled: open,
+  });
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CreateFormValues>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { type: 'ANNUAL' },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data: CreateFormValues) =>
+      apiClient.post('/api/performance', {
+        ...data,
+        reviewerId: data.reviewerId || undefined,
+        comments: data.comments || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['performance-reviews'] });
+      toast.success('Evaluación creada');
+      reset();
+      onClose();
+    },
+    onError: () => toast.error('No se pudo crear la evaluación.'),
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Nueva evaluación"
+      description="Iniciá una evaluación de desempeño para un empleado."
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit((d) => mutation.mutate(d))}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Plus size={14} />
+            )}
+            {mutation.isPending ? 'Creando...' : 'Crear evaluación'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className={labelClass}>Empleado *</label>
+          <select {...register('employeeId')} className={selectClass}>
+            <option value="">Seleccioná un empleado</option>
+            {(employees ?? []).map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.firstName} {e.lastName} ({e.legajo})
+              </option>
+            ))}
+          </select>
+          {errors.employeeId && (
+            <p className="mt-1 text-xs text-red-500">{errors.employeeId.message}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Tipo *</label>
+            <select {...register('type')} className={selectClass}>
+              <option value="ANNUAL">Anual</option>
+              <option value="QUARTERLY">Trimestral</option>
+              <option value="180">180°</option>
+              <option value="360">360°</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Período *</label>
+            <input
+              {...register('period')}
+              placeholder="ej. Q1 2025, H1 2025"
+              className={inputClass}
+            />
+            {errors.period && <p className="mt-1 text-xs text-red-500">{errors.period.message}</p>}
+          </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Evaluador (opcional)</label>
+          <select {...register('reviewerId')} className={selectClass}>
+            <option value="">Sin asignar</option>
+            {(employees ?? []).map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.firstName} {e.lastName} ({e.legajo})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className={labelClass}>Comentarios iniciales</label>
+          <textarea
+            {...register('comments')}
+            rows={3}
+            placeholder="Contexto o expectativas para esta evaluación..."
+            className="border-border text-navy-700 focus:ring-navy-400 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1"
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function ScoreDot({ score }: { score: number }) {
   const color = score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500';
   return (
@@ -71,6 +221,7 @@ function ScoreDot({ score }: { score: number }) {
 export function PerformancePage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [showCreate, setShowCreate] = useState(false);
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -90,7 +241,6 @@ export function PerformancePage() {
   const reviews = data?.data ?? [];
   const total = data?.meta.total ?? 0;
 
-  // Derive stats from reviews
   const pending = reviews.filter((r) => r.status === 'PENDING').length;
   const inProgress = reviews.filter((r) => r.status === 'IN_PROGRESS').length;
   const completed = reviews.filter((r) => r.status === 'COMPLETED').length;
@@ -98,7 +248,6 @@ export function PerformancePage() {
   const avgScore =
     scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
 
-  // Potential distribution
   const potentialMap: Record<string, number> = {};
   for (const r of reviews) {
     if (r.potential) potentialMap[r.potential] = (potentialMap[r.potential] ?? 0) + 1;
@@ -111,7 +260,7 @@ export function PerformancePage() {
           <h1 className="font-display text-navy-900 text-2xl font-bold">Performance</h1>
           <p className="text-navy-500 mt-1 text-sm">Evaluaciones de desempeño y desarrollo</p>
         </div>
-        <Button variant="primary" size="sm">
+        <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
           <Plus size={16} /> Nueva evaluación
         </Button>
       </div>
@@ -314,6 +463,8 @@ export function PerformancePage() {
           </table>
         </div>
       </Card>
+
+      <CreatePerformanceModal open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
   );
 }

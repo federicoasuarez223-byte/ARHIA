@@ -1,10 +1,15 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@arhia/ui';
-import { useQuery } from '@tanstack/react-query';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Modal } from '@arhia/ui';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { UserPlus, Search, Clock, CheckCircle, Users, Briefcase } from 'lucide-react';
+import { UserPlus, Search, Clock, CheckCircle, Users, Briefcase, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import apiClient from '@/services/api';
+import { toast } from '@/store/toast.store';
 
 interface RecruitmentSearch {
   id: string;
@@ -70,7 +75,187 @@ const CONTRACT_LABELS: Record<string, string> = {
   EVENTUAL: 'Eventual',
 };
 
+const selectClass =
+  'border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1';
+const inputClass =
+  'border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1';
+const labelClass = 'text-navy-700 mb-1.5 block text-sm font-medium';
+
+const createSchema = z.object({
+  title: z.string().min(1, 'Título requerido'),
+  type: z.enum(['INDEFINIDO', 'PLAZO_FIJO', 'TEMPORADA', 'PASANTIA', 'EVENTUAL']),
+  seniority: z.string().optional(),
+  location: z.string().optional(),
+  remote: z.boolean(),
+  salaryMin: z.coerce.number().positive().optional().or(z.literal('')),
+  salaryMax: z.coerce.number().positive().optional().or(z.literal('')),
+  currency: z.string().default('ARS'),
+  description: z.string().optional(),
+});
+type CreateFormValues = z.infer<typeof createSchema>;
+
+function CreateSearchModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CreateFormValues>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { type: 'INDEFINIDO', remote: false, currency: 'ARS' },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data: CreateFormValues) =>
+      apiClient.post('/api/recruitment/searches', {
+        ...data,
+        salaryMin: data.salaryMin !== '' && data.salaryMin ? Number(data.salaryMin) : undefined,
+        salaryMax: data.salaryMax !== '' && data.salaryMax ? Number(data.salaryMax) : undefined,
+        seniority: data.seniority || undefined,
+        location: data.location || undefined,
+        description: data.description || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recruitment-searches'] });
+      qc.invalidateQueries({ queryKey: ['recruitment-stats'] });
+      toast.success('Búsqueda creada');
+      reset();
+      onClose();
+    },
+    onError: () => toast.error('No se pudo crear la búsqueda.'),
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Nueva búsqueda"
+      description="Publicá una nueva búsqueda de talento."
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit((d) => mutation.mutate(d))}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <UserPlus size={14} />
+            )}
+            {mutation.isPending ? 'Creando...' : 'Crear búsqueda'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className={labelClass}>Título del puesto *</label>
+          <input
+            {...register('title')}
+            placeholder="ej. Desarrollador Backend Senior"
+            className={inputClass}
+          />
+          {errors.title && <p className="mt-1 text-xs text-red-500">{errors.title.message}</p>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Tipo de contrato</label>
+            <select {...register('type')} className={selectClass}>
+              {Object.entries(CONTRACT_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Seniority</label>
+            <select {...register('seniority')} className={selectClass}>
+              <option value="">Sin especificar</option>
+              <option value="JUNIOR">Junior</option>
+              <option value="SEMI_SENIOR">Semi Senior</option>
+              <option value="SENIOR">Senior</option>
+              <option value="LEAD">Lead</option>
+              <option value="MANAGER">Manager</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Ubicación</label>
+            <input
+              {...register('location')}
+              placeholder="ej. Buenos Aires"
+              className={inputClass}
+            />
+          </div>
+          <div className="flex items-center gap-3 pt-6">
+            <input
+              type="checkbox"
+              id="remote"
+              {...register('remote')}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            />
+            <label htmlFor="remote" className="text-navy-700 text-sm">
+              Posición remota
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>Salario mín.</label>
+            <input
+              {...register('salaryMin')}
+              type="number"
+              placeholder="ej. 500000"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Salario máx.</label>
+            <input
+              {...register('salaryMax')}
+              type="number"
+              placeholder="ej. 800000"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Moneda</label>
+            <select {...register('currency')} className={selectClass}>
+              <option value="ARS">ARS</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Descripción</label>
+          <textarea
+            {...register('description')}
+            rows={3}
+            placeholder="Descripción del rol y responsabilidades..."
+            className="border-border text-navy-700 focus:ring-navy-400 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1"
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function RecruitmentPage() {
+  const [showCreate, setShowCreate] = useState(false);
+
   const { data: stats } = useQuery({
     queryKey: ['recruitment-stats'],
     queryFn: async () => {
@@ -121,7 +306,7 @@ export function RecruitmentPage() {
           <h1 className="font-display text-navy-900 text-2xl font-bold">Reclutamiento</h1>
           <p className="text-navy-500 mt-1 text-sm">Pipeline de búsqueda y selección de talento</p>
         </div>
-        <Button variant="primary" size="sm">
+        <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
           <UserPlus size={16} /> Nueva búsqueda
         </Button>
       </div>
@@ -254,6 +439,8 @@ export function RecruitmentPage() {
           )}
         </div>
       </Card>
+
+      <CreateSearchModal open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
   );
 }
