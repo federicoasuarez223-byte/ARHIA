@@ -73,6 +73,115 @@ async function downloadSeniority() {
   downloadCsv('piramide_seniority.csv', csv);
 }
 
+async function downloadPayrollMonthly() {
+  const r = await apiClient.get<{
+    success: boolean;
+    data: { month: string; grossSalary: number; netSalary: number; deductions: number }[];
+  }>('/api/reports/payroll-monthly');
+  const csv = toCsv(
+    ['Período', 'Masa bruta (ARS)', 'Masa neta (ARS)', 'Retenciones (ARS)'],
+    r.data.data.map((row) => [row.month, row.grossSalary, row.netSalary, row.deductions]),
+  );
+  downloadCsv('masa_salarial_mensual.csv', csv);
+}
+
+async function downloadPayrollReceipts() {
+  const r = await apiClient.get<{
+    success: boolean;
+    data: {
+      legajo: string;
+      apellido: string;
+      nombre: string;
+      departamento: string;
+      periodo: string;
+      bruto: number;
+      jubilacion: number;
+      obraSocial: number;
+      anssal: number;
+      ley19032: number;
+      retenciones: number;
+      neto: number;
+      moneda: string;
+      estado: string;
+    }[];
+  }>('/api/reports/payroll-receipts');
+  const csv = toCsv(
+    [
+      'Legajo',
+      'Apellido',
+      'Nombre',
+      'Departamento',
+      'Período',
+      'Bruto',
+      'Jubilación',
+      'Obra Social',
+      'ANSSAL',
+      'Ley 19032',
+      'Retenciones',
+      'Neto',
+      'Moneda',
+      'Estado',
+    ],
+    r.data.data.map((row) => [
+      row.legajo,
+      row.apellido,
+      row.nombre,
+      row.departamento,
+      row.periodo,
+      row.bruto,
+      row.jubilacion,
+      row.obraSocial,
+      row.anssal,
+      row.ley19032,
+      row.retenciones,
+      row.neto,
+      row.moneda,
+      row.estado,
+    ]),
+  );
+  downloadCsv('recibos_de_haberes.csv', csv);
+}
+
+async function downloadAbsenteeism() {
+  const r = await apiClient.get<{
+    success: boolean;
+    data: { department: string; absentDays: number; totalDays: number; rate: number }[];
+  }>('/api/reports/absenteeism');
+  const csv = toCsv(
+    ['Departamento', 'Días ausentes', 'Total registros', 'Índice de ausentismo (%)'],
+    r.data.data.map((row) => [row.department, row.absentDays, row.totalDays, row.rate]),
+  );
+  downloadCsv('ausentismo_por_departamento.csv', csv);
+}
+
+async function downloadOvertime() {
+  const r = await apiClient.get<{
+    success: boolean;
+    data: {
+      legajo: string;
+      apellido: string;
+      nombre: string;
+      departamento: string;
+      fecha: string;
+      horasTrabajadas: number;
+      horasExtra: number;
+    }[];
+  }>('/api/reports/overtime');
+  const csv = toCsv(
+    ['Legajo', 'Apellido', 'Nombre', 'Departamento', 'Fecha', 'Horas trabajadas', 'Horas extra'],
+    r.data.data.map((row) => [
+      row.legajo,
+      row.apellido,
+      row.nombre,
+      row.departamento,
+      row.fecha,
+      row.horasTrabajadas,
+      row.horasExtra,
+    ]),
+  );
+  downloadCsv('horas_extras.csv', csv);
+}
+
 // ── Report card ───────────────────────────────────────────────────────────────
 
 interface ReportItem {
@@ -173,14 +282,16 @@ const SECTIONS = [
       {
         icon: DollarSign,
         title: 'Masa salarial mensual',
-        desc: 'Evolución de costos laborales',
-        tag: 'Próximamente',
+        desc: 'Evolución de costos laborales últimos 12 meses',
+        tag: 'Disponible',
+        onDownload: downloadPayrollMonthly,
       },
       {
         icon: FileText,
         title: 'Recibos de haberes',
-        desc: 'Exportación masiva de recibos del período',
-        tag: 'Próximamente',
+        desc: 'Exportación completa de recibos con detalle de deducciones',
+        tag: 'Disponible',
+        onDownload: downloadPayrollReceipts,
       },
     ] satisfies ReportItem[],
   },
@@ -190,14 +301,16 @@ const SECTIONS = [
       {
         icon: Clock,
         title: 'Ausentismo',
-        desc: 'Índice de inasistencias por departamento',
-        tag: 'Próximamente',
+        desc: 'Índice de inasistencias por departamento (últimos 6 meses)',
+        tag: 'Disponible',
+        onDownload: downloadAbsenteeism,
       },
       {
         icon: Clock,
         title: 'Horas extras',
-        desc: 'Resumen de horas adicionales trabajadas',
-        tag: 'Próximamente',
+        desc: 'Registros con más de 8 hs trabajadas (últimos 6 meses)',
+        tag: 'Disponible',
+        onDownload: downloadOvertime,
       },
     ] satisfies ReportItem[],
   },
