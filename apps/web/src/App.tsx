@@ -12,6 +12,7 @@ import { ChatPage } from '@/pages/ChatPage';
 import { ContractsPage } from '@/pages/ContractsPage';
 import { CulturePage } from '@/pages/CulturePage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { DepartmentsPage } from '@/pages/DepartmentsPage';
 import { EmployeeDetailPage } from '@/pages/EmployeeDetailPage';
 import { EmployeesPage } from '@/pages/EmployeesPage';
 import { IntegrationsPage } from '@/pages/IntegrationsPage';
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="integrations" element={<IntegrationsPage />} />
             <Route path="automation" element={<AutomationPage />} />
+            <Route path="departments" element={<DepartmentsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="chat" element={<ChatPage />} />
           </Route>

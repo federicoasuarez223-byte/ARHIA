@@ -1,4 +1,4 @@
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@arhia/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from '@arhia/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Palette, Save, Settings, Shield, Users, Bell } from 'lucide-react';
@@ -256,6 +256,108 @@ const PLAN_LABELS: Record<string, string> = {
   ENTERPRISE: 'Enterprise',
 };
 
+// ── Users tab ─────────────────────────────────────────────────────────────────
+
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Admin',
+  ADMIN: 'Admin',
+  HR_MANAGER: 'RRHH Manager',
+  HR_ANALYST: 'RRHH Analista',
+  MANAGER: 'Manager',
+  EMPLOYEE: 'Empleado',
+};
+
+const ROLE_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'default'> = {
+  SUPER_ADMIN: 'success',
+  ADMIN: 'warning',
+  HR_MANAGER: 'info',
+  HR_ANALYST: 'info',
+  MANAGER: 'default',
+  EMPLOYEE: 'default',
+};
+
+function UsersTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['settings-users'],
+    queryFn: async () => {
+      const r = await apiClient.get<{
+        success: boolean;
+        data: {
+          id: string;
+          firstName: string;
+          lastName: string;
+          email: string;
+          role: string;
+          isActive: boolean;
+          legajo: string;
+        }[];
+        meta: { total: number };
+      }>('/api/employees', { params: { limit: 100, sortBy: 'lastName', sortOrder: 'asc' } });
+      return r.data;
+    },
+  });
+
+  const users = data?.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users size={16} className="text-navy-500" />
+          Equipo con acceso al sistema
+        </CardTitle>
+        <span className="text-navy-400 text-sm">{data?.meta.total ?? '—'} personas</span>
+      </CardHeader>
+      <div className="overflow-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-border bg-surface border-b text-left">
+              <th className="text-navy-500 px-4 py-3 font-semibold">Nombre</th>
+              <th className="text-navy-500 px-4 py-3 font-semibold">Email</th>
+              <th className="text-navy-500 px-4 py-3 font-semibold">Legajo</th>
+              <th className="text-navy-500 px-4 py-3 font-semibold">Rol</th>
+              <th className="text-navy-500 px-4 py-3 font-semibold">Estado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-border divide-y">
+            {isLoading
+              ? Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 5 }).map((_, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="bg-surface-hover h-4 animate-pulse rounded" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : users.map((u) => (
+                  <tr key={u.id} className="hover:bg-surface transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="text-navy-900 font-medium">
+                        {u.firstName} {u.lastName}
+                      </p>
+                    </td>
+                    <td className="text-navy-500 px-4 py-3 text-xs">{u.email}</td>
+                    <td className="text-navy-500 px-4 py-3 font-mono text-xs">{u.legajo}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={ROLE_VARIANT[u.role] ?? 'default'} size="sm">
+                        {ROLE_LABELS[u.role] ?? u.role}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={u.isActive ? 'success' : 'default'} size="sm" dot>
+                        {u.isActive ? 'Activo' : 'Inactivo'}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const [activeTab, setActiveTab] = useState('company');
 
@@ -331,7 +433,9 @@ export function SettingsPage() {
             </>
           )}
 
-          {activeTab !== 'company' && (
+          {activeTab === 'users' && <UsersTab />}
+
+          {activeTab !== 'company' && activeTab !== 'users' && (
             <Card>
               <CardContent className="flex h-48 items-center justify-center">
                 <p className="text-navy-400 text-sm">Próximamente</p>

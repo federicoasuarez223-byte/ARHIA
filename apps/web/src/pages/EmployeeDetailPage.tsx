@@ -1,5 +1,5 @@
 import { Badge, Button } from '@arhia/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
@@ -25,6 +25,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { EditEmployeeModal } from '@/components/modules/employees/EditEmployeeModal';
 import apiClient from '@/services/api';
+import { toast } from '@/store/toast.store';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ interface EmployeeDetail {
   province?: string;
   address?: string;
   avatarUrl?: string;
+  isActive: boolean;
   notes?: string;
   emergencyContact?: { name: string; phone: string; relation: string };
   department: { id: string; name: string; code?: string };
@@ -635,6 +637,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 export function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [showEdit, setShowEdit] = useState(false);
 
@@ -647,6 +650,20 @@ export function EmployeeDetailPage() {
       return r.data.data;
     },
     enabled: !!id,
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: (active: boolean) =>
+      apiClient.patch(`/api/employees/${id}`, {
+        isActive: active,
+        employmentStatus: active ? 'ACTIVE' : 'TERMINATED',
+      }),
+    onSuccess: (_, active) => {
+      qc.invalidateQueries({ queryKey: ['employee', id] });
+      qc.invalidateQueries({ queryKey: ['employee-stats'] });
+      toast.success(active ? 'Empleado reactivado' : 'Empleado dado de baja');
+    },
+    onError: () => toast.error('No se pudo actualizar el estado del empleado.'),
   });
 
   if (isLoading) {
@@ -730,9 +747,30 @@ export function EmployeeDetailPage() {
             </div>
           </div>
           <div className="flex flex-col items-end gap-3">
-            <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
-              <Pencil size={14} /> Editar
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+                <Pencil size={14} /> Editar
+              </Button>
+              {data.isActive ? (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={deactivateMutation.isPending}
+                  onClick={() => deactivateMutation.mutate(false)}
+                >
+                  <XCircle size={14} /> Dar de baja
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={deactivateMutation.isPending}
+                  onClick={() => deactivateMutation.mutate(true)}
+                >
+                  <CheckCircle size={14} /> Reactivar
+                </Button>
+              )}
+            </div>
             <div className="text-right">
               <p className="text-navy-900 text-xl font-bold">
                 {Number(data.salary).toLocaleString('es-AR')}

@@ -119,3 +119,40 @@ trainingRouter.get('/:id/enrollments', async (req: TenantRequest, res: Response,
     next(e);
   }
 });
+
+const enrollSchema = z.object({
+  employeeId: z.string().uuid('employeeId inválido'),
+});
+
+trainingRouter.post('/:id/enrollments', async (req: TenantRequest, res: Response, next) => {
+  try {
+    const { employeeId } = enrollSchema.parse(req.body);
+    const companyId = req.companyId!;
+
+    // Check plan exists and belongs to company
+    const plan = await prisma.trainingPlan.findFirst({
+      where: { id: req.params.id, companyId },
+    });
+    if (!plan) {
+      res.status(404).json({ success: false, error: { message: 'Plan no encontrado' } });
+      return;
+    }
+
+    // Avoid duplicate enrollment
+    const existing = await prisma.trainingEnrollment.findFirst({
+      where: { planId: req.params.id, employeeId, companyId },
+    });
+    if (existing) {
+      res.status(409).json({ success: false, error: { message: 'El empleado ya está inscripto' } });
+      return;
+    }
+
+    const enrollment = await prisma.trainingEnrollment.create({
+      data: { planId: req.params.id, employeeId, companyId, status: 'PENDING', progress: 0 },
+      include: { employee: { select: { id: true, firstName: true, lastName: true } } },
+    });
+    res.status(201).json({ success: true, data: enrollment });
+  } catch (e) {
+    next(e);
+  }
+});

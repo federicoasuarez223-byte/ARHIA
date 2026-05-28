@@ -1,7 +1,7 @@
 import { Button, Card, CardContent, CardHeader, CardTitle, Modal } from '@arhia/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GraduationCap, Clock, Users, ExternalLink, Plus, Loader2 } from 'lucide-react';
+import { GraduationCap, Clock, Users, ExternalLink, Plus, Loader2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -195,10 +195,102 @@ function CreatePlanModal({ open, onClose }: { open: boolean; onClose: () => void
   );
 }
 
+// ── Enroll modal ───────────────────────────────────────────────────────────────
+
+const enrollSchema = z.object({ employeeId: z.string().min(1, 'Empleado requerido') });
+type EnrollFormValues = z.infer<typeof enrollSchema>;
+
+function EnrollModal({ plan, onClose }: { plan: TrainingPlan | null; onClose: () => void }) {
+  const qc = useQueryClient();
+
+  const { data: employees } = useQuery({
+    queryKey: ['employees-list-mini'],
+    queryFn: async () => {
+      const r = await apiClient.get<{
+        success: boolean;
+        data: { id: string; firstName: string; lastName: string; legajo: string }[];
+      }>('/api/employees', { params: { limit: 200, sortBy: 'lastName', sortOrder: 'asc' } });
+      return r.data.data ?? [];
+    },
+    enabled: !!plan,
+  });
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<EnrollFormValues>({
+    resolver: zodResolver(enrollSchema),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data: EnrollFormValues) =>
+      apiClient.post(`/api/training/${plan!.id}/enrollments`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-plans'] });
+      qc.invalidateQueries({ queryKey: ['training-stats'] });
+      toast.success('Empleado inscripto al plan');
+      reset();
+      onClose();
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response
+        ?.data?.error?.message;
+      toast.error(msg ?? 'No se pudo inscribir al empleado.');
+    },
+  });
+
+  return (
+    <Modal
+      open={!!plan}
+      onClose={onClose}
+      title="Inscribir empleado"
+      description={plan ? `Plan: ${plan.title}` : ''}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit((d) => mutation.mutate(d))}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <UserPlus size={14} />
+            )}
+            {mutation.isPending ? 'Inscribiendo...' : 'Inscribir'}
+          </Button>
+        </>
+      }
+    >
+      <div>
+        <label className={labelClass}>Empleado *</label>
+        <select {...register('employeeId')} className={selectClass}>
+          <option value="">Seleccioná un empleado</option>
+          {(employees ?? []).map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.firstName} {e.lastName} ({e.legajo})
+            </option>
+          ))}
+        </select>
+        {errors.employeeId && (
+          <p className="mt-1 text-xs text-red-500">{errors.employeeId.message}</p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export function TrainingPage() {
   const [showCreate, setShowCreate] = useState(false);
+  const [enrolling, setEnrolling] = useState<TrainingPlan | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ['training-stats'],
@@ -335,6 +427,9 @@ export function TrainingPage() {
                           <ExternalLink size={12} /> Ver curso
                         </Button>
                       )}
+                      <Button variant="outline" size="xs" onClick={() => setEnrolling(plan)}>
+                        <UserPlus size={12} /> Inscribir
+                      </Button>
                     </div>
                   </div>
                 );
@@ -355,6 +450,7 @@ export function TrainingPage() {
       </div>
 
       <CreatePlanModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <EnrollModal plan={enrolling} onClose={() => setEnrolling(null)} />
     </div>
   );
 }

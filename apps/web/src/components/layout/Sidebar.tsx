@@ -1,27 +1,43 @@
-import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard, Users, AlertTriangle, UserPlus, TrendingUp,
-  DollarSign, FileText, Clock, GraduationCap, Heart, BarChart3,
-  Puzzle, Zap, MessageSquare, Settings, ChevronLeft, ChevronRight,
-} from 'lucide-react';
-
 import { cn } from '@arhia/ui';
+import {
+  LayoutDashboard,
+  Users,
+  AlertTriangle,
+  UserPlus,
+  TrendingUp,
+  DollarSign,
+  FileText,
+  Clock,
+  GraduationCap,
+  Heart,
+  BarChart3,
+  Puzzle,
+  Zap,
+  MessageSquare,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Building2,
+} from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+
 import { useAuthStore } from '@/store/auth.store';
 
 const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: 'Dashboard',      path: '/dashboard' },
-  { icon: Users,           label: 'Empleados',      path: '/employees' },
-  { icon: AlertTriangle,   label: 'Riesgo',         path: '/risk' },
-  { icon: UserPlus,        label: 'Reclutamiento',  path: '/recruitment' },
-  { icon: TrendingUp,      label: 'Performance',    path: '/performance' },
-  { icon: DollarSign,      label: 'Liquidaciones',  path: '/payroll' },
-  { icon: FileText,        label: 'Contratos',      path: '/contracts' },
-  { icon: Clock,           label: 'Asistencia',     path: '/attendance' },
-  { icon: GraduationCap,   label: 'Capacitación',   path: '/training' },
-  { icon: Heart,           label: 'Cultura',        path: '/culture' },
-  { icon: BarChart3,       label: 'Reportes',       path: '/reports' },
-  { icon: Puzzle,          label: 'Integraciones',  path: '/integrations' },
-  { icon: Zap,             label: 'Automatización', path: '/automation' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+  { icon: Users, label: 'Empleados', path: '/employees' },
+  { icon: Building2, label: 'Departamentos', path: '/departments' },
+  { icon: AlertTriangle, label: 'Riesgo', path: '/risk' },
+  { icon: UserPlus, label: 'Reclutamiento', path: '/recruitment' },
+  { icon: TrendingUp, label: 'Performance', path: '/performance' },
+  { icon: DollarSign, label: 'Liquidaciones', path: '/payroll' },
+  { icon: FileText, label: 'Contratos', path: '/contracts' },
+  { icon: Clock, label: 'Asistencia', path: '/attendance' },
+  { icon: GraduationCap, label: 'Capacitación', path: '/training' },
+  { icon: Heart, label: 'Cultura', path: '/culture' },
+  { icon: BarChart3, label: 'Reportes', path: '/reports' },
+  { icon: Puzzle, label: 'Integraciones', path: '/integrations' },
+  { icon: Zap, label: 'Automatización', path: '/automation' },
 ];
 
 interface SidebarProps {
@@ -35,7 +51,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'relative flex flex-col bg-navy-900 transition-all duration-300',
+        'bg-navy-900 relative flex flex-col transition-all duration-300',
         collapsed ? 'w-16' : 'w-60',
       )}
     >
@@ -43,23 +59,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="flex h-16 items-center border-b border-white/10 px-4">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-500">
-              <span className="text-xs font-black text-navy-900">AR</span>
+            <div className="bg-gold-500 flex h-8 w-8 items-center justify-center rounded-lg">
+              <span className="text-navy-900 text-xs font-black">AR</span>
             </div>
-            <span className="font-display text-lg font-bold tracking-tight text-white">
-              ARHIA
-            </span>
+            <span className="font-display text-lg font-bold tracking-tight text-white">ARHIA</span>
           </div>
         )}
         {collapsed && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-500">
-            <span className="text-xs font-black text-navy-900">AR</span>
+          <div className="bg-gold-500 flex h-8 w-8 items-center justify-center rounded-lg">
+            <span className="text-navy-900 text-xs font-black">AR</span>
           </div>
         )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
+      <nav className="scrollbar-hide flex-1 overflow-y-auto py-4">
         <ul className="space-y-0.5 px-2">
           {NAV_ITEMS.map(({ icon: Icon, label, path }) => (
             <li key={path}>
@@ -120,12 +134,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* User info */}
         {!collapsed && user && (
           <div className="mt-3 flex items-center gap-3 rounded-lg px-3 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy-700 text-xs font-semibold text-white">
+            <div className="bg-navy-700 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white">
               {user.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-white">{user.name}</p>
-              <p className="truncate text-2xs text-navy-400">{user.companyName}</p>
+              <p className="text-2xs text-navy-400 truncate">{user.companyName}</p>
             </div>
           </div>
         )}
@@ -134,7 +148,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Collapse toggle */}
       <button
         onClick={onToggle}
-        className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-white shadow-sm hover:bg-surface-hover"
+        className="border-border hover:bg-surface-hover absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border bg-white shadow-sm"
         aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
       >
         {collapsed ? (

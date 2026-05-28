@@ -375,11 +375,24 @@ function CreateLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function AttendancePage() {
+  const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [tab, setTab] = useState<'attendance' | 'leaves'>('attendance');
   const [showAttendance, setShowAttendance] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const limit = 25;
+
+  const leaveActionMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'APPROVED' | 'REJECTED' }) =>
+      apiClient.patch(`/api/attendance/leaves/${id}`, { status }),
+    onSuccess: (_, { status }) => {
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      toast.success(status === 'APPROVED' ? 'Licencia aprobada' : 'Licencia rechazada');
+      setApprovingId(null);
+    },
+    onError: () => toast.error('No se pudo actualizar la licencia.'),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['attendance', page, tab],
@@ -464,6 +477,7 @@ export function AttendancePage() {
                     <th className="text-navy-500 px-4 py-3 font-semibold">Desde</th>
                     <th className="text-navy-500 px-4 py-3 font-semibold">Hasta</th>
                     <th className="text-navy-500 px-4 py-3 font-semibold">Días</th>
+                    <th className="text-navy-500 px-4 py-3 font-semibold" />
                   </>
                 )}
               </tr>
@@ -534,6 +548,7 @@ export function AttendancePage() {
                     label: leave.status,
                     variant: 'default' as const,
                   };
+                  const isActioning = approvingId === leave.id;
                   return (
                     <tr key={leave.id} className="hover:bg-surface transition-colors">
                       <td className="px-4 py-3">
@@ -557,6 +572,35 @@ export function AttendancePage() {
                         {format(new Date(leave.endDate), 'dd/MM/yyyy', { locale: es })}
                       </td>
                       <td className="text-navy-600 px-4 py-3 font-mono text-xs">{leave.days}</td>
+                      <td className="px-4 py-3">
+                        {leave.status === 'PENDING' && (
+                          <div className="flex gap-1.5">
+                            <Button
+                              variant="primary"
+                              size="xs"
+                              disabled={isActioning}
+                              onClick={() => {
+                                setApprovingId(leave.id);
+                                leaveActionMutation.mutate({ id: leave.id, status: 'APPROVED' });
+                              }}
+                            >
+                              {isActioning ? <Loader2 size={11} className="animate-spin" /> : null}
+                              Aprobar
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="xs"
+                              disabled={isActioning}
+                              onClick={() => {
+                                setApprovingId(leave.id);
+                                leaveActionMutation.mutate({ id: leave.id, status: 'REJECTED' });
+                              }}
+                            >
+                              Rechazar
+                            </Button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
