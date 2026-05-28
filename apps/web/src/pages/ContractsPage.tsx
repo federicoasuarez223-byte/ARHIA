@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FileText, Plus, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { FileText, Plus, ChevronLeft, ChevronRight, Loader2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -239,9 +239,85 @@ function CreateContractModal({ open, onClose }: { open: boolean; onClose: () => 
   );
 }
 
+// ── Terminate modal ───────────────────────────────────────────────────────────
+
+function TerminateContractModal({
+  contract,
+  onClose,
+}: {
+  contract: Contract | null;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [terminationDate, setTerminationDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      apiClient.patch(`/api/contracts/${contract!.id}`, {
+        status: 'TERMINATED',
+        endDate: terminationDate,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contracts'] });
+      toast.success('Contrato rescindido');
+      onClose();
+    },
+    onError: () => toast.error('No se pudo rescindir el contrato.'),
+  });
+
+  return (
+    <Modal
+      open={!!contract}
+      onClose={onClose}
+      title="Rescindir contrato"
+      description={
+        contract
+          ? `${contract.employee.firstName} ${contract.employee.lastName} · ${TYPE_LABELS[contract.type] ?? contract.type}`
+          : ''
+      }
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <XCircle size={14} />
+            )}
+            {mutation.isPending ? 'Rescindiendo...' : 'Rescindir contrato'}
+          </Button>
+        </>
+      }
+    >
+      <div>
+        <label className={labelClass}>Fecha de rescisión</label>
+        <input
+          type="date"
+          value={terminationDate}
+          onChange={(e) => setTerminationDate(e.target.value)}
+          className={inputClass}
+        />
+        <p className="text-navy-400 mt-2 text-xs">
+          El contrato pasará a estado Rescindido y no podrá reactivarse.
+        </p>
+      </div>
+    </Modal>
+  );
+}
+
 export function ContractsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [terminating, setTerminating] = useState<Contract | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const limit = 20;
 
@@ -309,13 +385,14 @@ export function ContractsPage() {
                 <th className="text-navy-500 px-4 py-3 font-semibold">Inicio</th>
                 <th className="text-navy-500 px-4 py-3 font-semibold">Venc.</th>
                 <th className="text-navy-500 px-4 py-3 font-semibold">Salario</th>
+                <th className="text-navy-500 px-4 py-3 font-semibold" />
               </tr>
             </thead>
             <tbody className="divide-border divide-y">
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="bg-surface-hover h-5 animate-pulse rounded" />
                       </td>
@@ -324,7 +401,7 @@ export function ContractsPage() {
                 ))
               ) : contracts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-navy-400 py-10 text-center">
+                  <td colSpan={8} className="text-navy-400 py-10 text-center">
                     Sin contratos
                   </td>
                 </tr>
@@ -366,6 +443,22 @@ export function ContractsPage() {
                       <td className="text-navy-700 px-4 py-3 font-mono">
                         {Number(c.salary).toLocaleString('es-AR')} {c.currency}
                       </td>
+                      <td className="px-4 py-3">
+                        {(c.status === 'ACTIVE' ||
+                          c.status === 'DRAFT' ||
+                          c.status === 'PENDING_SIGNATURE') && (
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTerminating(c);
+                            }}
+                          >
+                            <XCircle size={12} /> Rescindir
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -401,6 +494,7 @@ export function ContractsPage() {
       </Card>
 
       <CreateContractModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <TerminateContractModal contract={terminating} onClose={() => setTerminating(null)} />
     </div>
   );
 }

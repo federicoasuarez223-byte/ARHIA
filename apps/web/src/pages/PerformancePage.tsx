@@ -218,10 +218,123 @@ function ScoreDot({ score }: { score: number }) {
   );
 }
 
+// ── Complete review modal ──────────────────────────────────────────────────────
+
+const completeSchema = z.object({
+  score: z.coerce.number().int().min(0).max(100),
+  potential: z.enum(['LOW', 'MEDIUM', 'HIGH', 'STAR']).optional().or(z.literal('')),
+  comments: z.string().optional(),
+});
+type CompleteFormValues = z.infer<typeof completeSchema>;
+
+const POTENTIAL_OPTIONS = [
+  { value: 'STAR', label: '⭐ Estrella' },
+  { value: 'HIGH', label: '🔼 Alto potencial' },
+  { value: 'MEDIUM', label: '➡️ Medio' },
+  { value: 'LOW', label: '🔽 Bajo' },
+];
+
+function CompleteReviewModal({
+  review,
+  onClose,
+}: {
+  review: PerformanceReview | null;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CompleteFormValues>({
+    resolver: zodResolver(completeSchema),
+    defaultValues: { score: review?.score ?? 75, potential: '', comments: review?.comments ?? '' },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data: CompleteFormValues) =>
+      apiClient.patch(`/api/performance/${review!.id}`, {
+        status: 'COMPLETED',
+        score: data.score,
+        potential: data.potential || undefined,
+        comments: data.comments || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['performance-reviews'] });
+      toast.success('Evaluación completada');
+      reset();
+      onClose();
+    },
+    onError: () => toast.error('No se pudo completar la evaluación.'),
+  });
+
+  return (
+    <Modal
+      open={!!review}
+      onClose={onClose}
+      title="Completar evaluación"
+      description={
+        review ? `${review.employee.firstName} ${review.employee.lastName} · ${review.period}` : ''
+      }
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit((d) => mutation.mutate(d))}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <CheckCircle size={14} />
+            )}
+            {mutation.isPending ? 'Guardando...' : 'Completar'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className={labelClass}>Puntaje (0–100) *</label>
+          <input {...register('score')} type="number" min={0} max={100} className={inputClass} />
+          {errors.score && <p className="mt-1 text-xs text-red-500">{errors.score.message}</p>}
+        </div>
+        <div>
+          <label className={labelClass}>Potencial</label>
+          <select {...register('potential')} className={selectClass}>
+            <option value="">Sin especificar</option>
+            {POTENTIAL_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Comentarios finales</label>
+          <textarea
+            {...register('comments')}
+            rows={3}
+            placeholder="Observaciones, logros, áreas de mejora..."
+            className="border-border text-navy-700 focus:ring-navy-400 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1"
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function PerformancePage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
+  const [completing, setCompleting] = useState<PerformanceReview | null>(null);
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -373,13 +486,14 @@ export function PerformancePage() {
                 <th className="text-navy-500 px-4 py-3 font-semibold">Potencial</th>
                 <th className="text-navy-500 px-4 py-3 font-semibold">Evaluador</th>
                 <th className="text-navy-500 px-4 py-3 font-semibold">Fecha</th>
+                <th className="text-navy-500 px-4 py-3 font-semibold" />
               </tr>
             </thead>
             <tbody className="divide-border divide-y">
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="bg-surface-hover h-4 animate-pulse rounded" />
                       </td>
@@ -455,6 +569,13 @@ export function PerformancePage() {
                               locale: es,
                             })}
                       </td>
+                      <td className="px-4 py-3">
+                        {rev.status !== 'COMPLETED' && rev.status !== 'CANCELLED' && (
+                          <Button variant="outline" size="xs" onClick={() => setCompleting(rev)}>
+                            <CheckCircle size={12} /> Completar
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -465,6 +586,7 @@ export function PerformancePage() {
       </Card>
 
       <CreatePerformanceModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <CompleteReviewModal review={completing} onClose={() => setCompleting(null)} />
     </div>
   );
 }

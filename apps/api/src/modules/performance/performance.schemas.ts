@@ -18,5 +18,16 @@ export const createPerformanceSchema = z.object({
   comments: z.string().optional(),
 });
 
+export const updatePerformanceSchema = z.object({
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
+  score: z.number().int().min(0).max(100).optional(),
+  potential: z.enum(['LOW', 'MEDIUM', 'HIGH', 'STAR']).optional().nullable(),
+  strengths: z.array(z.string()).optional(),
+  improvements: z.array(z.string()).optional(),
+  comments: z.string().optional(),
+  reviewerId: z.string().optional().nullable(),
+});
+
 export type ListPerformanceDto = z.infer<typeof listPerformanceSchema>;
 export type CreatePerformanceDto = z.infer<typeof createPerformanceSchema>;
+export type UpdatePerformanceDto = z.infer<typeof updatePerformanceSchema>;

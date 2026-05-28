@@ -1,6 +1,10 @@
 import type { Prisma } from '@prisma/client';
 
-import type { ListPerformanceDto, CreatePerformanceDto } from './performance.schemas';
+import type {
+  ListPerformanceDto,
+  CreatePerformanceDto,
+  UpdatePerformanceDto,
+} from './performance.schemas';
 
 import { prisma } from '@/config/database';
 
@@ -83,4 +87,26 @@ export async function createReview(companyId: string, dto: CreatePerformanceDto)
   });
 
   return review;
+}
+
+export async function updateReview(companyId: string, id: string, dto: UpdatePerformanceDto) {
+  const existing = await prisma.performanceReview.findFirst({ where: { id, companyId } });
+  if (!existing) throw new PerformanceError('NOT_FOUND', 'Evaluación no encontrada', 404);
+
+  const data: Prisma.PerformanceReviewUpdateInput = {};
+  if (dto.status !== undefined) {
+    data.status = dto.status;
+    if (dto.status === 'COMPLETED' && !existing.completedAt) {
+      data.completedAt = new Date();
+    }
+  }
+  if (dto.score !== undefined) data.score = dto.score;
+  if (dto.potential !== undefined) data.potential = dto.potential;
+  if (dto.strengths !== undefined) data.strengths = { set: dto.strengths };
+  if (dto.improvements !== undefined) data.improvements = { set: dto.improvements };
+  if (dto.comments !== undefined) data.comments = dto.comments;
+  if (dto.reviewerId !== undefined)
+    data.reviewer = dto.reviewerId ? { connect: { id: dto.reviewerId } } : { disconnect: true };
+
+  return prisma.performanceReview.update({ where: { id }, data });
 }
