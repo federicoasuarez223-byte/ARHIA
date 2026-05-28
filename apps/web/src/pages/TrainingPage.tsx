@@ -1,8 +1,13 @@
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@arhia/ui';
-import { useQuery } from '@tanstack/react-query';
-import { GraduationCap, Clock, Users, ExternalLink } from 'lucide-react';
+import { Button, Card, CardContent, CardHeader, CardTitle, Modal } from '@arhia/ui';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { GraduationCap, Clock, Users, ExternalLink, Plus, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import apiClient from '@/services/api';
+import { toast } from '@/store/toast.store';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -40,9 +45,161 @@ const UNIT_LABELS: Record<string, string> = {
   WEEKS: 'semanas',
 };
 
+// ── Create Plan Modal ─────────────────────────────────────────────────────────
+
+const selectClass =
+  'border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1';
+const inputClass =
+  'border-border text-navy-700 focus:ring-navy-400 h-9 w-full rounded-lg border bg-white px-3 text-sm focus:outline-none focus:ring-1';
+const labelClass = 'text-navy-700 mb-1.5 block text-sm font-medium';
+
+const planSchema = z.object({
+  title: z.string().min(1, 'Título requerido'),
+  type: z.enum(['SKILL', 'COMPLIANCE', 'LEADERSHIP', 'TECHNICAL', 'ONBOARDING']),
+  provider: z.string().optional(),
+  duration: z.coerce.number().int().positive().optional().or(z.literal('')),
+  durationUnit: z.enum(['HOURS', 'DAYS', 'WEEKS']),
+  url: z.string().optional(),
+  description: z.string().optional(),
+});
+type PlanFormValues = z.infer<typeof planSchema>;
+
+function CreatePlanModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<PlanFormValues>({
+    resolver: zodResolver(planSchema),
+    defaultValues: { type: 'SKILL', durationUnit: 'HOURS' },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data: PlanFormValues) =>
+      apiClient.post('/api/training', {
+        ...data,
+        duration: data.duration !== '' && data.duration ? Number(data.duration) : undefined,
+        provider: data.provider || undefined,
+        url: data.url || undefined,
+        description: data.description || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-plans'] });
+      qc.invalidateQueries({ queryKey: ['training-stats'] });
+      toast.success('Plan de capacitación creado');
+      reset();
+      onClose();
+    },
+    onError: () => toast.error('No se pudo crear el plan.'),
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Nuevo plan de capacitación"
+      description="Creá un plan de formación para tu equipo."
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit((d) => mutation.mutate(d))}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <GraduationCap size={14} />
+            )}
+            {mutation.isPending ? 'Creando...' : 'Crear plan'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className={labelClass}>Título *</label>
+          <input
+            {...register('title')}
+            placeholder="ej. Liderazgo para nuevos managers"
+            className={inputClass}
+          />
+          {errors.title && <p className="mt-1 text-xs text-red-500">{errors.title.message}</p>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Tipo *</label>
+            <select {...register('type')} className={selectClass}>
+              {Object.entries(TYPE_CONFIG).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Proveedor</label>
+            <input
+              {...register('provider')}
+              placeholder="ej. Udemy, LinkedIn Learning"
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-2">
+            <label className={labelClass}>Duración</label>
+            <input
+              {...register('duration')}
+              type="number"
+              min="1"
+              placeholder="ej. 8"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Unidad</label>
+            <select {...register('durationUnit')} className={selectClass}>
+              <option value="HOURS">Horas</option>
+              <option value="DAYS">Días</option>
+              <option value="WEEKS">Semanas</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>URL del curso</label>
+          <input {...register('url')} type="url" placeholder="https://..." className={inputClass} />
+        </div>
+
+        <div>
+          <label className={labelClass}>Descripción</label>
+          <textarea
+            {...register('description')}
+            rows={3}
+            placeholder="Descripción del plan y sus objetivos..."
+            className="border-border text-navy-700 focus:ring-navy-400 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1"
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export function TrainingPage() {
+  const [showCreate, setShowCreate] = useState(false);
+
   const { data: stats } = useQuery({
     queryKey: ['training-stats'],
     queryFn: () =>
@@ -66,6 +223,9 @@ export function TrainingPage() {
           <h1 className="font-display text-navy-900 text-2xl font-bold">Capacitación</h1>
           <p className="text-navy-500 mt-1 text-sm">Planes de formación y desarrollo</p>
         </div>
+        <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
+          <Plus size={16} /> Nuevo plan
+        </Button>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -122,6 +282,14 @@ export function TrainingPage() {
               <p className="text-navy-400 mt-1 text-sm">
                 Creá el primer plan para empezar a formar tu equipo
               </p>
+              <Button
+                variant="primary"
+                size="sm"
+                className="mt-4"
+                onClick={() => setShowCreate(true)}
+              >
+                <Plus size={14} /> Crear plan
+              </Button>
             </div>
           ) : (
             <div className="divide-border divide-y">
@@ -185,6 +353,8 @@ export function TrainingPage() {
           automáticamente.
         </p>
       </div>
+
+      <CreatePlanModal open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
   );
 }
