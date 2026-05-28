@@ -8,6 +8,8 @@ import {
   ChevronRight,
   Plus,
   Loader2,
+  CheckCircle,
+  Banknote,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -168,8 +170,33 @@ function fmt(n: number) {
 }
 
 export function PayrollPage() {
+  const qc = useQueryClient();
   const [expandedPeriod, setExpandedPeriod] = useState<string | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [bulkUpdating, setBulkUpdating] = useState<string | null>(null);
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiClient.patch(`/api/payroll/${id}`, { status }),
+    onError: () => toast.error('Error al actualizar el estado.'),
+  });
+
+  async function handleBulkUpdate(period: PeriodGroup, newStatus: string) {
+    setBulkUpdating(period.key);
+    try {
+      await Promise.all(
+        period.records.map((rec) => statusMutation.mutateAsync({ id: rec.id, status: newStatus })),
+      );
+      qc.invalidateQueries({ queryKey: ['payroll-records'] });
+      qc.invalidateQueries({ queryKey: ['payroll-stats'] });
+      const label = newStatus === 'APPROVED' ? 'aprobado' : 'marcado como pagado';
+      toast.success(`Período ${period.label} ${label}`);
+    } catch {
+      // individual errors already toasted
+    } finally {
+      setBulkUpdating(null);
+    }
+  }
 
   const { data: records, isLoading } = useQuery({
     queryKey: ['payroll-records'],
@@ -405,6 +432,40 @@ export function PayrollPage() {
                           })}
                         </tbody>
                       </table>
+                      {(p.status === 'DRAFT' || p.status === 'APPROVED') && (
+                        <div className="border-border flex items-center justify-end gap-2 border-t px-6 py-3">
+                          {p.status === 'DRAFT' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={bulkUpdating === p.key}
+                              onClick={() => handleBulkUpdate(p, 'APPROVED')}
+                            >
+                              {bulkUpdating === p.key ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <CheckCircle size={14} />
+                              )}
+                              {bulkUpdating === p.key ? 'Aprobando...' : 'Aprobar período'}
+                            </Button>
+                          )}
+                          {p.status === 'APPROVED' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={bulkUpdating === p.key}
+                              onClick={() => handleBulkUpdate(p, 'PAID')}
+                            >
+                              {bulkUpdating === p.key ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Banknote size={14} />
+                              )}
+                              {bulkUpdating === p.key ? 'Procesando...' : 'Marcar como pagado'}
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
